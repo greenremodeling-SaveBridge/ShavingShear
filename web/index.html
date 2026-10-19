@@ -1,0 +1,1490 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>세이빙 셰어</title>
+<meta name="theme-color" content="#ffffff">
+<meta name="description" content="그린리모델링 절감액을 검증하고 임대인·임차인이 나누는 정산 플랫폼">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<!-- Pretendard 폰트 추가 -->
+<link rel="stylesheet" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+/* ══════════════════════════════════════════════════════
+   글꼴 — 로컬 파일을 먼저 찾고, 없으면 CDN, 그것도 없으면 맑은 고딕
+   (UI/UX 개선: 기본 폰트로 Pretendard를 우선 적용하여 세련됨과 가독성 확보)
+   ══════════════════════════════════════════════════════ */
+@font-face{
+  font-family:'GmarketSans';font-weight:700;font-display:swap;
+  src:url('fonts/GmarketSansBold.woff2') format('woff2'),
+      url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff') format('woff');
+}
+@font-face{
+  font-family:'NanumSquareEB';font-weight:800;font-display:swap;
+  src:url('fonts/NanumSquareEB.woff2') format('woff2'),
+      url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/NanumSquareEB.woff') format('woff');
+}
+@font-face{
+  font-family:'SCoreDream4';font-weight:400;font-display:swap;
+  src:url('fonts/SCoreDream4.woff2') format('woff2'),
+      url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-4Regular.woff') format('woff');
+}
+
+/* ══════════════════════════════════════════════════════
+   세이빙 셰어 — 정산 문서 화면 (UI/UX 개선판)
+   ══════════════════════════════════════════════════════ */
+
+:root{
+  --ink:#111827;         /* 잉크 — 명도를 낮춰 텍스트 대비 향상 */
+  --paper:#FFFFFF;       /* 순백색 문서 바탕 */
+  --owner:#1E40AF;       /* 건물주 (조금 더 선명하고 트렌디한 파랑) */
+  --tenant:#0F766E;      /* 임차인 (세련된 청록) */
+  --seal:#DC2626;        /* 보류·이상 (강렬한 적색) */
+  --grid:#E5E7EB;        /* 괘선 (너무 강하지 않고 은은하게) */
+  --dim:#4B5563;         /* 보조 글자 (가독성을 위해 기존보다 진하게) */
+  --warm:#C2410C;        /* 난방 */
+  --cool:#0369A1;        /* 냉방 */
+  --ok:#16A34A;          /* 성공/통과 */
+
+  /* 파란색 체계 — 핵심 문장·강조·활성 상태 */
+  --blue:#2563EB;        /* 트렌디한 밝은 파랑 */
+  --blue-d:#1D4ED8;      /* 짙은 파랑 — 제목 강조 */
+  --blue-l:#DBEAFE;      /* 옅은 파랑 — 배경 */
+  --blue-ll:#EFF6FF;     /* 아주 옅은 파랑 */
+
+  /* 글꼴 체계 - Pretendard를 최우선으로 */
+  --fb: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', '맑은 고딕', sans-serif;
+  --f-title: 'Pretendard', 'GmarketSans', var(--fb);
+  --f: 'Pretendard', var(--fb);
+  --f-key: 'Pretendard', 'SCoreDream4', var(--fb);
+
+  /* 본문 굵기 — 800에서 400(Regular) / 500(Medium)으로 변경해 눈의 피로도 감소 */
+  --w-body:400;
+  
+  /* 디자인 토큰 */
+  --radius: 12px;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%; scroll-behavior: smooth;}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--f);font-weight:var(--w-body);
+  font-size:17px; /* 나이든 사용자 배려: 기본 폰트 사이즈 확대 (15.5 -> 17) */
+  line-height:1.6;letter-spacing:-.01em;
+  font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+h1,h2,h3,.mark,.stamp .s,.sno{font-family:var(--f-title);font-weight:700;letter-spacing:-.02em}
+
+/* 핵심 문장 */
+.key{
+  font-family:var(--f-key);font-weight:500;color:var(--blue-d);
+  letter-spacing:-0.01em;line-height:1.7;
+}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+
+/* ── 레이아웃 ───────────────────────────── */
+.wrap{max-width:960px;margin:0 auto;padding:0 24px}
+@media(max-width:600px){.wrap{padding:0 16px}}
+
+/* ── 상단 고정 바 (글래스모피즘 적용) ───────────────────────── */
+header{
+  position:sticky;top:0;z-index:50;
+  background:rgba(255, 255, 255, 0.85); /* 반투명 */
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(0,0,0,0.08);
+  transition: all 0.3s ease;
+}
+.bar{display:flex;align-items:center;gap:20px;min-height:64px; padding: 10px 0;}
+.mark{font-weight:700;font-size:18px;letter-spacing:-.02em;white-space:nowrap; color:var(--ink)}
+.mark span{font-weight:400;color:var(--dim)}
+nav{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+nav a{
+  font-size:14px;color:var(--dim);text-decoration:none;white-space:nowrap;
+  padding:8px 12px;border:1px solid transparent;border-radius:8px;
+  font-weight:500; transition: all 0.2s ease;
+}
+@media(max-width:1040px){
+  .mark span{display:none}
+}
+nav a:hover{color:var(--blue);background:var(--blue-ll)}
+nav a[aria-current="true"]{color:var(--blue);font-weight:700;background:var(--blue-ll); box-shadow: var(--shadow-sm);}
+.conn{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--dim);white-space:nowrap; padding: 6px 10px; background: #f3f4f6; border-radius: 20px;}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--grid)}
+.dot.up{background:var(--ok); box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);}
+.dot.down{background:var(--seal); box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);}
+@media(max-width:820px){
+  .bar{height:auto;padding:12px 0;flex-wrap:wrap;gap:12px}
+  nav{order:3;width:100%;margin-left:0; overflow-x:auto; padding-bottom:4px; flex-wrap:nowrap; -webkit-overflow-scrolling:touch;}
+  nav::-webkit-scrollbar {display:none;}
+}
+
+/* ── 백업 모드 띠 ───────────────────────── */
+#backupBanner{
+  display:none;background:#FEF3C7;border-bottom:1px solid #F59E0B;
+  color:#92400E;font-size:14.5px;padding:12px 0; font-weight:500;
+}
+#backupBanner.on{display:block}
+#backupBanner b{font-weight:700}
+
+/* ── 표제 ───────────────────────────────── */
+.hero{padding:72px 0 56px;border-bottom:1px solid var(--grid)}
+.hero h1{
+  margin:0 0 24px;font-size:clamp(30px,5vw,48px);line-height:1.3;
+  font-weight:700;letter-spacing:-.02em;max-width:20em;
+  color: var(--ink);
+}
+.hero p{margin:0;max-width:36em;color:var(--dim);font-size:18px; line-height: 1.6;}
+.hero .thesis{
+  margin-top:32px;padding:20px 24px;border-radius: var(--radius);
+  background:var(--blue-ll);max-width:40em;
+  font-family:var(--f-key);font-weight:500;color:var(--blue-d);
+  font-size:17px;line-height:1.7;letter-spacing:-0.01em;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--blue-l);
+}
+
+/* ── 구획 ───────────────────────────────── */
+section{padding:64px 0;border-bottom:1px solid var(--grid)}
+section:last-of-type{border-bottom:none}
+.shead{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.sno{
+  font-size:13px;font-weight:700;color:var(--paper);background:var(--blue);
+  width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+  flex:0 0 auto; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+}
+.shead h2{margin:0;font-size:24px;font-weight:700;letter-spacing:-.02em; color:var(--ink);}
+.sdesc{margin:0 0 32px;color:var(--dim);font-size:16px;max-width:46em;
+       font-weight:400;line-height:1.6;}
+
+/* ── 출처 표시 칩 (실측/예측/가정) ───────── */
+.pv{
+  display:inline-flex;align-items:center;font-size:12px;line-height:1;font-weight:600;
+  padding:4px 8px;border-radius:6px;vertical-align:middle;margin-right:8px;
+  white-space:nowrap;
+}
+.pv-m{background:var(--ink);color:var(--paper)}                              /* 실측 */
+.pv-p{background:var(--blue-ll);color:var(--owner);border:1px solid var(--blue-l)}/* 예측 */
+.pv-a{background:#FEF2F2;color:var(--seal);border:1px solid #FECACA} /* 가정 */
+.legend{display:flex;gap:20px;flex-wrap:wrap;font-size:14px;color:var(--dim);margin-top:24px; font-weight:500;}
+
+/* ── 입력 UI (터치 친화적 큼직한 폼) ───────────────────────────────── */
+label{display:block;font-size:14px;font-weight:600;margin-bottom:8px; color:var(--ink);}
+input[type=text],input[type=number],select{
+  font-family:var(--f);font-size:17px;font-variant-numeric:tabular-nums;
+  padding:12px 16px;border:1px solid #D1D5DB;border-radius:var(--radius);
+  background:#fff;color:var(--ink);width:100%;
+  min-height: 48px; /* 터치 영역 보장 */
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible,
+input[type=range]:focus-visible{outline:none; border-color:var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,0.2);}
+.codes{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:20px}
+@media(max-width:600px){.codes{grid-template-columns:repeat(2,1fr); gap:12px}}
+.row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.row>div{flex:1 1 240px}
+
+button{
+  font-family:var(--f);font-size:16px;font-weight:600;cursor:pointer;
+  padding:12px 24px;border-radius:var(--radius);border:none;
+  background:var(--blue);color:#fff; min-height: 48px; /* 터치 영역 */
+  transition: all 0.2s ease; box-shadow: var(--shadow-sm);
+  display:inline-flex; align-items:center; justify-content:center;
+}
+button:hover{background:var(--blue-d); transform: translateY(-1px); box-shadow: var(--shadow-md);}
+button:active{transform: translateY(0); box-shadow: var(--shadow-sm);}
+button.ghost{background:var(--blue-ll);color:var(--blue-d);border:1px solid var(--blue-l); box-shadow:none;}
+button.ghost:hover{background:var(--blue-l);border-color:var(--blue);}
+button:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.hint{font-size:14px;color:var(--dim);margin-top:12px; font-weight: 400;}
+
+/* ── 상태 표시 (로딩/오류/빈값) ──────────── */
+.state{font-size:16px;padding:24px 0;color:var(--dim)}
+.state.err{
+  color:var(--seal);border-radius:var(--radius);
+  padding:20px;background:#FEF2F2; border: 1px solid #FECACA;
+  box-shadow: var(--shadow-sm); margin-top: 16px;
+}
+.state.err b{display:block;font-weight:700;margin-bottom:6px; font-size:17px;}
+.state.err button{margin-top:16px}
+.skel{height:16px;background:#E5E7EB;border-radius:8px;animation:p 1.5s ease-in-out infinite; margin-top:8px;}
+@keyframes p{0%,100%{opacity:.4}50%{opacity:.8}}
+@media(prefers-reduced-motion:reduce){.skel{animation:none}*{transition:none!important}}
+
+/* ── 제원표 (괘선 표 → 모던 리스트형/카드형 느낌으로 다듬음) ───────────────────── */
+.facts{width:100%;border-collapse:collapse;font-size:15.5px}
+.facts th,.facts td{text-align:left;padding:14px 12px;border-bottom:1px solid var(--grid);vertical-align:top}
+.facts th{font-weight:600;color:var(--dim);width:10em;font-size:15px; padding-left:0;}
+.facts td{font-weight:500; padding-right:0;}
+.facts tr:last-child th,.facts tr:last-child td{border-bottom:none}
+
+/* ── 요건 체크 (아이콘 뱃지화) ──────────────────────────── */
+.chk{border-top:1px solid var(--grid); margin:0; padding:0; margin-top:20px;}
+.chk li{
+  list-style:none;display:grid;grid-template-columns:32px 1fr auto;gap:16px;
+  align-items:center;padding:16px 0;border-bottom:1px solid var(--grid);
+}
+.chk .m{
+  font-weight:700;font-size:16px; width:28px; height:28px; border-radius:50%;
+  display:grid; place-items:center;
+}
+.chk .m.y{color:var(--ok); background:#DCFCE7;}
+.chk .m.n{color:var(--seal); background:#FEE2E2;}
+.chk .nm{font-size:16.5px;font-weight:600; color:var(--ink); display:block;}
+.chk .pg{font-size:14px;color:var(--dim);margin-top:4px}
+.chk .dt{font-size:15px;color:var(--dim);text-align:right; font-weight:500;}
+@media(max-width:600px){
+  .chk li{grid-template-columns:32px 1fr; align-items:flex-start;}
+  .chk .dt{grid-column:2;text-align:left; margin-top:4px;}
+}
+.verdictline{
+  margin-top:24px;padding:20px 24px;font-size:17px;
+  border:1px solid var(--blue-l);border-radius:var(--radius);
+  background:var(--blue-ll);font-family:var(--f-key);font-weight:600;
+  color:var(--blue-d);line-height:1.6; box-shadow:var(--shadow-sm);
+}
+.verdictline.no{border-color:#FECACA;color:var(--seal);background:#FEF2F2}
+
+/* ── 지표 (그리드 선 제거하고 카드 뷰로 변경) ───────────────────────────────── */
+.mx{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
+@media(max-width:600px){.mx{grid-template-columns:1fr}}
+.mx div{
+  background:#fff;padding:20px; border-radius:var(--radius);
+  border:1px solid var(--grid); box-shadow:var(--shadow-sm);
+  transition: box-shadow 0.2s;
+}
+.mx div:hover{box-shadow:var(--shadow-md);}
+.mx .k{font-size:14px;color:var(--dim);margin-bottom:8px; font-weight:600;}
+.mx .v{font-family:var(--f-title);font-size:32px;font-weight:700;letter-spacing:-.02em;line-height:1.2;color:var(--blue-d)}
+.mx .c{font-size:13.5px;margin-top:8px; font-weight:500;}
+.mx .c.pass{color:var(--ok); background:#DCFCE7; display:inline-block; padding:2px 8px; border-radius:4px;}
+.mx .c.fail{color:var(--seal); background:#FEE2E2; display:inline-block; padding:2px 8px; border-radius:4px;}
+
+details{border:1px solid var(--grid); border-radius:var(--radius); margin-top:24px; background:#fafafa; box-shadow:var(--shadow-sm);}
+details[open]{background:#fff;}
+summary{cursor:pointer;font-size:16px;font-weight:600; padding:16px 20px; list-style:none; position:relative;}
+summary::-webkit-details-marker {display:none;}
+summary::after {content:'+'; position:absolute; right:20px; top:50%; transform:translateY(-50%); font-size:20px; color:var(--dim); font-weight:400;}
+details[open] summary::after {content:'−';}
+summary:hover{color:var(--owner)}
+details .facts{margin-top:0; padding:0 20px 20px; border-top:1px solid var(--grid);}
+details .facts th, details .facts td {padding:12px 0;}
+
+/* ── 차트 ───────────────────────────────── */
+figure{margin:0; padding:24px; border-radius:var(--radius); border:1px solid var(--grid); background:#fff; box-shadow:var(--shadow-sm);}
+svg{display:block;width:100%;height:auto;overflow:visible; font-family:var(--f);}
+figcaption{font-size:14px;color:var(--dim);margin-top:20px; line-height:1.6;}
+.keys{display:flex;gap:20px;flex-wrap:wrap;font-size:14px;margin:0 0 20px; font-weight:500;}
+.keys i{display:inline-block;width:24px;height:0;border-top-width:3px;
+       border-top-style:solid;vertical-align:middle;margin-right:8px}
+
+/* ── 분배 슬라이더 (이 화면의 중심, 터치 친화적 조작) ───────── */
+.simgrid{display:grid;grid-template-columns:280px 1fr;gap:48px;align-items:start}
+@media(max-width:820px){.simgrid{grid-template-columns:1fr;gap:32px}}
+.ctl{margin-bottom:28px}
+.ctl .lab{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.ctl .lab b{font-size:15px;font-weight:600; color:var(--ink);}
+.ctl .lab span{font-size:18px;font-weight:700; color:var(--blue-d);}
+/* 슬라이더 큼직하게 변경 */
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:32px;
+  background:transparent;cursor:pointer;margin:0;
+}
+input[type=range]::-webkit-slider-runnable-track{height:8px;background:#E5E7EB; border-radius:4px;}
+input[type=range]::-moz-range-track{height:8px;background:#E5E7EB; border-radius:4px;}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:28px;height:28px;border-radius:50%;
+  background:#fff;border:3px solid var(--blue);margin-top:-10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15); transition:transform 0.1s;
+}
+input[type=range]::-webkit-slider-thumb:active{transform:scale(1.1);}
+input[type=range]::-moz-range-thumb{
+  width:28px;height:28px;border-radius:50%;background:#fff;
+  border:3px solid var(--blue); box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+/* 분배 막대 */
+.splitwrap{position:relative;padding-top:32px}
+.split{display:flex;height:88px;border-radius:var(--radius);overflow:hidden; box-shadow:var(--shadow-md);}
+.split>div{
+  display:flex;flex-direction:column;justify-content:center;padding:0 20px;
+  color:#fff;min-width:0;transition:flex-basis .2s cubic-bezier(0.4,0,0.2,1);
+}
+.split .o{background:var(--owner)}
+.split .t{
+  background:var(--tenant);
+  background-image:repeating-linear-gradient(135deg,
+    rgba(255,255,255,.15) 0 3px,transparent 3px 9px);
+}
+.split .who{font-size:13.5px;opacity:.9;margin-bottom:2px; font-weight:500;}
+.split .amt{font-size:22px;font-weight:700;letter-spacing:-.02em;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.split .per{font-size:13px;opacity:.85; margin-top:2px; font-weight:500;}
+@media(max-width:560px){
+  .split{height:76px}
+  .split>div{padding:0 12px}
+  .split .amt{font-size:17px}
+  .split .who{font-size:12px}
+}
+
+/* 회수 임계선 */
+.thresh{position:absolute;top:0;bottom:0;width:0;pointer-events:none; z-index:10;}
+.thresh .ln{position:absolute;top:28px;bottom:-10px;border-left:2px dashed var(--seal)}
+.thresh .tag{
+  position:absolute;top:0;transform:translateX(-50%);white-space:nowrap;
+  font-size:13px;font-weight:700;color:#fff;background:var(--seal);
+  padding:4px 10px; border-radius:20px; box-shadow:var(--shadow-sm);
+}
+.thresh.off{display:none}
+
+.callout{
+  margin-top:24px;padding:20px; border-radius:var(--radius);
+  background:var(--blue-ll);font-size:16px;font-weight:600;
+  border: 1px solid var(--blue-l); color:var(--blue-d);
+  box-shadow:var(--shadow-sm);
+}
+.callout.warn{border-color:#FECACA;background:#FEF2F2;color:var(--seal)}
+.callout.good{border-color:#bbf7d0;background:#F0FDF4;color:#166534}
+.sub{display:flex;gap:32px;flex-wrap:wrap;margin-top:24px;font-size:14.5px;color:var(--dim)}
+.sub b{display:block;color:var(--ink);font-size:20px;font-weight:700; margin-top:4px;}
+
+/* ── 정산 리포트 (버튼 및 테이블 모던화) ────────────────────────── */
+.cases{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:32px}
+.cases button{font-size:15px;padding:10px 18px; border-radius:24px; min-height:44px;}
+.cases button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink); box-shadow:var(--shadow-sm);}
+.cases button[aria-pressed="false"]{background:#fff;color:var(--dim);border-color:var(--grid);}
+.cases button[aria-pressed="false"]:hover{background:#f9fafb; color:var(--ink);}
+
+.report{border-radius:var(--radius); border:1px solid var(--grid);background:#fff; box-shadow:var(--shadow-md); overflow:hidden;}
+.rtop{display:flex;gap:24px;align-items:flex-start;padding:28px;
+      border-bottom:1px solid var(--grid);flex-wrap:wrap; background:#FAFAFA;}
+.stamp{
+  flex:0 0 auto;border:3px solid var(--ink);border-radius:8px;
+  padding:10px 20px;text-align:center;transform:rotate(-3deg);
+  background:#fff; box-shadow:var(--shadow-sm);
+}
+.stamp .s{font-size:22px;font-weight:800;letter-spacing:.15em;
+          text-indent:.15em;line-height:1.2}
+.stamp .q{font-size:12px;color:var(--dim);letter-spacing:.02em; font-weight:600; margin-top:4px;}
+.stamp.hold{border-color:var(--seal);color:var(--seal)}
+.stamp.hold .q{color:var(--seal)}
+.stamp.none{border-color:var(--dim);color:var(--dim);transform:none}
+.stamp.est{border-color:var(--owner);color:var(--owner)}
+.total.nil{color:var(--dim);font-size:32px;font-weight:600;letter-spacing:-.02em}
+.stamp.fix{border-color:var(--ok);color:var(--ok)}
+.rsum{flex:1 1 240px;min-width:0}
+.rsum .total{font-size:42px;font-weight:700;letter-spacing:-.02em;line-height:1.1; color:var(--blue-d);}
+.rsum .total em{font-size:20px;font-weight:500;font-style:normal;color:var(--dim)}
+.rsum .total.nil{font-size:32px;color:var(--dim);letter-spacing:-.01em}
+.rsum .msg{font-size:15px;color:var(--dim);margin-top:10px;max-width:36em; line-height:1.6;}
+.rsum .msg.key{color:var(--ink); font-weight:600;}
+
+.shares{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--grid); background:#fff;}
+.shares div{padding:24px 28px}
+.shares div+div{border-left:1px solid var(--grid)}
+.shares .who{font-size:14.5px;color:var(--dim);margin-bottom:6px; font-weight:600;}
+.shares .amt{font-size:28px;font-weight:700;letter-spacing:-.02em}
+.shares .o .amt{color:var(--owner)}
+.shares .t .amt{color:var(--tenant)}
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch; background:#fff;}
+.tscroll .mtbl{min-width:100%}
+@media(max-width:600px){
+  .tscroll .mtbl{min-width:480px}
+  .tscroll .mtbl th,.tscroll .mtbl td{padding:14px 16px;font-size:14.5px;white-space:nowrap}
+  .tscroll .mtbl .nt{white-space:normal;min-width:14em}
+  .shares{grid-template-columns:1fr}
+  .shares div+div{border-left:none;border-top:1px solid var(--grid)}
+}
+
+.mtbl{width:100%;border-collapse:collapse;font-size:15.5px}
+.mtbl th,.mtbl td{padding:16px 28px;border-bottom:1px solid var(--grid);text-align:left; vertical-align:middle;}
+.mtbl th{font-size:14px;font-weight:600;color:var(--dim);background:#F9FAFB}
+.mtbl td.r,.mtbl th.r{text-align:right}
+.mtbl tr:last-child td{border-bottom:none}
+.mtbl .st{font-size:13.5px;font-weight:700; display:inline-block; padding:4px 8px; border-radius:6px; background:#f3f4f6;}
+.mtbl .st.ok{color:#166534; background:#DCFCE7;}
+.mtbl .st.fl{color:var(--seal); background:#FEE2E2;}
+.mtbl .st.nd{color:var(--dim);}
+.mtbl .nt{font-size:13.5px;color:var(--dim); margin-top:6px; line-height:1.5;}
+.mtbl tr.flagged{background:#FEF2F2}
+.mtbl tr.nodata td{color:var(--dim)}
+
+.ai{padding:24px 28px;border-top:1px solid var(--grid);background:#EFF6FF}
+.ai .h{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.ai .h b{font-size:15px;font-weight:700; color:var(--blue-d);}
+.ai .src{font-size:12px;color:var(--blue);border:1px solid var(--blue-l); background:#fff;
+         padding:2px 8px;border-radius:20px; font-weight:600;}
+.ai p{margin:0;font-size:16px;line-height:1.7;max-width:48em; color:var(--ink);}
+
+/* ── 특약 초안 (설계안임을 명시) ──────────── */
+.draft{border:2px dashed #CBD5E1;background:#F8FAFC;padding:32px;position:relative; border-radius:var(--radius);}
+.draft .tag{
+  display:inline-block;font-size:13px;font-weight:700;color:var(--dim); background:#fff;
+  border:1px solid #CBD5E1;padding:4px 12px;border-radius:20px;margin-bottom:20px;
+}
+.draft ol{margin:0;padding-left:1.5em;font-size:16px;line-height:1.8}
+.draft ol li{margin-bottom:12px; color:var(--ink);}
+.draft ol li b{font-weight:700; color:var(--blue-d);}
+.draft .blank{display:inline-block;min-width:5em;border-bottom:2px solid var(--ink);
+              text-align:center;font-weight:700; color:var(--ink); padding:0 4px;}
+
+/* ── 건축물 진단 · 개선 대책 ─────────────── */
+.sub3{font-family:var(--f-title);font-size:18px;font-weight:700;margin:40px 0 16px;
+      padding-bottom:10px;border-bottom:2px solid var(--blue); color:var(--ink);}
+.tiny{font-size:13px;color:var(--dim);margin-top:4px; font-weight:400;}
+.miss{color:var(--seal);font-weight:600}
+.yrs .ybar{display:block;height:12px;background:var(--owner);opacity:.8; border-radius:6px;}
+.finds{margin:0;padding:0;list-style:none}
+.finds li{padding:20px 0;border-bottom:1px solid var(--grid)}
+.finds .ft{font-size:17px;font-weight:700; color:var(--ink);}
+.finds .fd{margin:8px 0 0;font-size:15.5px;color:var(--dim);max-width:56em; line-height:1.6;}
+.finds .fi{margin:10px 0 0;font-size:15px;padding-left:16px;border-left:3px solid var(--dim); color:var(--ink); font-weight:500;}
+.finds .fa{margin:10px 0 0;font-size:14.5px;color:var(--seal); font-weight:600;}
+.warnbox{border:1px solid #FECACA;background:#FEF2F2;padding:20px; border-radius:var(--radius);
+         margin-bottom:24px;font-size:15px;color:var(--seal); box-shadow:var(--shadow-sm);}
+.warnbox b{display:block;font-weight:700;margin-bottom:8px; font-size:16px;}
+.warnbox ul{margin:0;padding-left:1.4em; line-height:1.6;}
+.meas th,.meas td{padding:16px 16px; font-size:15px;}
+.pick{display:inline-flex;gap:12px;align-items:center;cursor:pointer;font-weight:600; padding:4px 0;}
+.pick input{margin:0;accent-color:var(--blue);width:20px;height:20px;flex:0 0 auto; cursor:pointer;}
+.totbox{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:32px}
+.totbox>div{background:var(--blue-ll);padding:24px; border-radius:var(--radius); border:1px solid var(--blue-l); box-shadow:var(--shadow-sm);}
+.totbox .k{font-size:14.5px;color:var(--dim);margin-bottom:8px; font-weight:600;}
+.totbox .v{font-family:var(--f-title);font-size:32px;font-weight:700;letter-spacing:-.02em;line-height:1.2;color:var(--blue-d)}
+.totbox .v em{font-size:18px;font-weight:500;font-style:normal;color:var(--dim)}
+.totbox .c{font-size:14px;color:var(--dim);margin-top:8px; font-weight:500;}
+
+/* 합계 산출 과정 */
+.adj{margin-top:24px;border:1px solid var(--grid);border-radius:var(--radius);background:#F9FAFB;padding:24px; box-shadow:var(--shadow-sm);}
+.adj .ah{font-family:var(--f-title);font-size:15px;font-weight:700;color:var(--dim);
+         margin-bottom:16px}
+.adj .arow{display:flex;justify-content:space-between;gap:16px;align-items:center;
+           padding:10px 0;border-bottom:1px solid var(--grid);font-size:15.5px}
+.adj .arow.tot{border-bottom:none;border-top:2px solid var(--blue);margin-top:8px;
+               padding-top:16px; background:transparent;}
+.adj .al{color:var(--dim);font-weight:600}
+.adj .arow.tot .al{color:var(--ink); font-weight:700; font-size:17px;}
+.adj .av{white-space:nowrap; font-weight:500;}
+.adj .av.strike{color:var(--dim);text-decoration:line-through;text-decoration-thickness:1.5px}
+.adj .av.minus{color:var(--seal); font-weight:600;}
+.adj .arow.tot .av{font-family:var(--f-title);font-weight:700;font-size:20px;color:var(--blue-d)}
+.adj .key{margin:16px 0 0;font-size:14.5px; color:var(--dim); font-weight:400;}
+@media(max-width:600px){.adj .arow{flex-direction:column;gap:6px; align-items:flex-start;}}
+
+.lims{margin:16px 0 0;padding-left:1.4em;font-size:15px;color:var(--dim); line-height:1.6;}
+.lims li{margin-bottom:8px}
+@media(max-width:640px){
+  .totbox{grid-template-columns:1fr}
+  .meas th,.meas td{padding:12px 12px;font-size:14px}
+}
+
+/* ── 이용자 특성 (카드 레이아웃으로 변경) ─────────────────────────── */
+.users{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px;}
+.users .u{background:#fff;padding:28px; border-radius:var(--radius); border:1px solid var(--grid); box-shadow:var(--shadow-md);}
+.users .uh{display:flex;align-items:center;gap:12px;padding-bottom:16px;margin-bottom:20px;
+           border-bottom:2px solid var(--ink)}
+.users .uh b{font-size:22px;font-weight:700; color:var(--ink);}
+.users .uh span{font-size:14px;color:var(--dim); font-weight:500; background:#f3f4f6; padding:4px 10px; border-radius:20px;}
+.users .o .uh{border-bottom-color:var(--owner)}
+.users .t .uh{border-bottom-color:var(--tenant)}
+.users ul{margin:0;padding-left:1.4em;font-size:15.5px;line-height:1.7; color:var(--dim);}
+.users li{margin-bottom:8px}
+.users li b{color:var(--ink); font-weight:600;}
+.users .ur{margin-top:24px;padding:16px 20px;background:#F8FAFC; border-radius:8px;
+           border-left:4px solid var(--ink);font-size:15px;line-height:1.6; color:var(--ink);}
+.users .o .ur{border-left-color:var(--owner); background:#EFF6FF;}
+.users .t .ur{border-left-color:var(--tenant); background:#F0FDFA;}
+.users .ur>b:first-child{display:block;font-family:var(--f-title);font-size:13px;
+  color:var(--dim);margin-bottom:6px;font-weight:700;letter-spacing:0; text-transform:uppercase;}
+.users .ur b{color:var(--blue-d); font-weight:700;}
+.ushare{margin-top:32px;padding:24px 28px;border:1px solid var(--blue-l);border-radius:var(--radius); background:var(--blue-ll); box-shadow:var(--shadow-sm);}
+.ushare b{font-size:17px;font-weight:700; color:var(--blue-d); display:block; margin-bottom:12px;}
+.ushare p{margin:0;font-size:16px;max-width:54em; color:var(--ink); line-height:1.7;}
+@media(max-width:760px){.users{grid-template-columns:1fr}}
+
+/* ── 꼬리말 ─────────────────────────────── */
+footer{border-top:1px solid var(--grid);padding:48px 0 80px;font-size:14.5px;color:var(--dim); line-height:1.6;}
+footer h3{font-size:15px;font-weight:700;color:var(--ink);margin:0 0 12px}
+footer ul{margin:0 0 32px;padding-left:1.4em}
+footer li{margin-bottom:6px}
+footer a{color:var(--blue); text-decoration:none;}
+footer a:hover{text-decoration:underline;}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <div class="mark">세이빙 셰어 <span>· 그린리모델링 정산</span></div>
+    <nav id="nav">
+      <a href="#sU">이용자</a>
+      <a href="#s1">조회</a>
+      <a href="#s2">판정</a>
+      <a href="#sD">진단</a>
+      <a href="#sM">대책</a>
+      <a href="#s3">기저선</a>
+      <a href="#s4">분배</a>
+      <a href="#s5">정산</a>
+      <a href="#sS">시스템</a>
+    </nav>
+    <div class="conn"><span class="dot" id="connDot"></span><span id="connTxt">확인 중</span></div>
+  </div>
+</header>
+
+<div id="backupBanner">
+  <div class="wrap"><b>저장된 응답으로 동작 중</b> — 서버에 연결되어 있지 않습니다. 실제 API 응답을 저장해둔 값이며, 지금 계산한 값이 아닙니다.</div>
+</div>
+
+<div class="wrap">
+
+  <div class="hero">
+    <h1>절감액을 예측하는 AI가 아니라, 절감액을 믿고 나눌 수 있게 하는 AI</h1>
+    <p>그린리모델링은 건물주가 공사비를 내고 임차인이 요금을 아낍니다. 비용과 이익이 갈라져 있어서, 둘 다 손해를 보지 않는데도 아무도 먼저 투자하지 않습니다.</p>
+    <div class="thesis">세이빙 셰어는 공사를 하지 않았다면 썼을 사용량을 추정해 절감량을 숫자로 만들고, 그 숫자를 믿을 수 있는지 판정한 뒤, 양측이 같은 근거를 보고 나눌 수 있게 합니다.</div>
+  </div>
+
+  <!-- ⓪ 이용자 특성 ───────────────────────── -->
+  <section id="sU">
+    <div class="shead"><span class="sno">0</span><h2>누가 쓰는가</h2></div>
+    <p class="sdesc">이용자는 에너지 전문가가 아닙니다. 공사비를 내는 쪽과 요금을 내는 쪽이 서로를 믿지 못하는 상황에서 같은 화면을 보고 합의해야 합니다. 그 특성에 맞춰 화면을 설계했습니다.</p>
+
+    <div class="users">
+      <div class="u o">
+        <div class="uh"><b>건물주</b><span>공사비를 내는 쪽</span></div>
+        <ul>
+          <li>소규모 상가·사무 건물 소유. 에너지 전문 지식이 없습니다</li>
+          <li>관심은 하나 — <b>얼마를 써서 얼마를 언제 돌려받는가</b></li>
+          <li>절감 이익은 임차인에게 가는데 공사비는 본인이 냅니다</li>
+        </ul>
+        <div class="ur"><b>화면 대응</b> 분배 슬라이더에 <b>회수선</b>을 그려, 몫을 몇 %로 해야 공사비가 회수되는지 끌어보면 바로 보이게 했습니다</div>
+      </div>
+      <div class="u t">
+        <div class="uh"><b>임차인</b><span>요금을 내는 쪽</span></div>
+        <ul>
+          <li>소상공인. 계약 기간이 유한해 장기 회수를 기대할 수 없습니다</li>
+          <li>관심은 <b>내 요금이 실제로 줄었는가</b>, 더 내라는 요구가 정당한가</li>
+          <li>공사 중 영업 지장과 임대료 인상을 걱정합니다</li>
+        </ul>
+        <div class="ur"><b>화면 대응</b> 모든 금액에 <b>산정 근거와 가정</b>을 붙이고, 월별 내역을 양측이 동일하게 열람합니다</div>
+      </div>
+    </div>
+
+    <div class="ushare">
+      <b>공통 특성 — 서로의 숫자를 믿지 못합니다</b>
+      <p class="key">한쪽이 계산한 절감액은 다른 쪽이 받아들이지 않습니다. 그래서 숫자를 크게 뽑는 대신 <b>근거가 부족하면 금액을 내놓지 않는 쪽</b>을 택했습니다. 같은 근거를 같은 화면에서 보는 것이 합의의 전제입니다.</p>
+    </div>
+  </section>
+
+  <!-- ① 건물 조회 ─────────────────────────── -->
+  <section id="s1">
+    <div class="shead"><span class="sno">1</span><h2>조회</h2></div>
+    <p class="sdesc">건축물대장에서 건물 제원을 가져옵니다. 실제 서비스에서는 주소를 입력하면 도로명주소 API가 법정동·본번·부번 코드로 바꿔줍니다. 지금은 그 코드를 직접 넣습니다.</p>
+
+    <div class="row">
+      <div>
+        <label for="addr">주소</label>
+        <input id="addr" type="text" list="addrList" value="서울 ○○구 ○○동" autocomplete="off">
+        <datalist id="addrList"><option value="서울 ○○구 ○○동"></option></datalist>
+      </div>
+      <button id="btnFind">건물 조회</button>
+    </div>
+    <div class="codes">
+      <div><label for="sigungu">시군구코드</label><input id="sigungu" type="text" value="11680"></div>
+      <div><label for="bjdong">법정동코드</label><input id="bjdong" type="text" value="10100"></div>
+      <div><label for="bun">본번</label><input id="bun" type="text" value="0761"></div>
+      <div><label for="ji">부번</label><input id="ji" type="text" value="0026"></div>
+    </div>
+    <p class="hint">출처: 국토교통부 건축HUB 건축물대장정보 서비스</p>
+
+    <div id="bldOut" class="state">조회를 누르면 건물 제원이 표시됩니다.</div>
+  </section>
+
+  <!-- ② 대상 판정 ─────────────────────────── -->
+  <section id="s2">
+    <div class="shead"><span class="sno">2</span><h2>대상 판정</h2></div>
+    <p class="sdesc">건축물대장 값만으로 지원사업 요건과 데이터 확보 가능 여부를 확인합니다. 사람이 서류를 떼기 전에 걸러냅니다.</p>
+    <div id="eligOut" class="state">건물 조회 후 자동으로 판정합니다.</div>
+  </section>
+
+  <!-- ②·5 건축물 진단 ─────────────────────── -->
+  <section id="sD">
+    <div class="shead"><span class="sno">3</span><h2>건축물 진단</h2></div>
+    <p class="sdesc">공공 에너지데이터로 확인되는 것과 현장 확인이 필요한 것을 나눕니다. 사용량만 보고 단열이나 설비 상태를 단정하지 않습니다.</p>
+    <div id="diagOut" class="state">건물 조회 후 자동으로 진단합니다.</div>
+  </section>
+
+  <!-- ②·6 개선 대책 ───────────────────────── -->
+  <section id="sM">
+    <div class="shead"><span class="sno">4</span><h2>개선 대책과 저감 효과</h2></div>
+    <p class="sdesc">진단에서 확인된 문제에 대응하는 대책을 고르면, 예상 에너지 절감량과 온실가스 감축량이 범위로 나옵니다. 단일 확정값으로 제시하지 않습니다.</p>
+    <div id="measOut" class="state">건물 조회 후 사용할 수 있습니다.</div>
+  </section>
+
+  <!-- ③ 기저선 추정 ───────────────────────── -->
+  <section id="s3">
+    <div class="shead"><span class="sno">5</span><h2>기저선 추정</h2></div>
+    <p class="sdesc">공사를 하지 않았다면 썼을 사용량을 기온으로 추정합니다. 절감량은 이 기저선과 실측의 차이입니다. 기저선은 관측할 수 없으므로, 추정이 얼마나 맞는지를 먼저 검증합니다.</p>
+    <div id="baseOut" class="state">건물 조회 후 자동으로 계산합니다.</div>
+  </section>
+
+  <!-- ④ 분배 시뮬레이터 ───────────────────── -->
+  <section id="s4">
+    <div class="shead"><span class="sno">6</span><h2>분배 시뮬레이터</h2></div>
+    <p class="sdesc">공사비와 분배 조건을 넣으면 양측의 몫과 회수 가능 여부가 나옵니다. 막대 위의 붉은 선은 공사비가 회수되는 최소 건물주 몫입니다. 파란 칸이 그 선을 넘으면 회수됩니다.</p>
+    <div id="allocOut" class="state">건물 조회 후 사용할 수 있습니다.</div>
+  </section>
+
+  <!-- ⑤ 정산 리포트 ───────────────────────── -->
+  <section id="s5">
+    <div class="shead"><span class="sno">7</span><h2>정산 리포트</h2></div>
+    <p class="sdesc">분기별로 금액을 산출하고, 확정할 수 있는지 판정합니다. 사용량에 설명되지 않는 변화가 있으면 금액을 내놓지 않고 보류합니다.</p>
+    <div id="caseBar" class="cases"></div>
+    <div id="setlOut" class="state">건물 조회 후 사용할 수 있습니다.</div>
+  </section>
+
+  <!-- 특약 초안 ───────────────────────────── -->
+  <section id="s6">
+    <div class="shead"><span class="sno">8</span><h2>임대차 특약 초안</h2></div>
+    <p class="sdesc">정산 결과를 계약 문구로 옮기는 단계입니다. 본선 범위에서는 화면 설계안까지만 제시합니다. 실제 계약서로 쓰려면 법률 검토가 필요합니다.</p>
+    <div class="draft">
+      <span class="tag">설계안 — 법적 효력 없음</span>
+      <ol>
+        <li><b>절감액 산정</b> — 절감량은 기온 보정 기저선과 실측 사용량의 차이로 산정하며, 단가는 계약 시점의 실제 요금표를 적용한다.</li>
+        <li><b>분배</b> — 절감액은 건물주 <span class="blank" id="dOwner">70%</span>, 임차인 <span class="blank" id="dTenant">30%</span>로 분배하고, 분배 기간은 <span class="blank" id="dYears">10년</span>으로 한다.</li>
+        <li><b>검증 기준</b> — 예측 오차가 기준을 넘거나 설명력이 기준에 못 미치는 경우, 오차 범위만큼 보수적으로 잠정 정산하고 연 단위로 확정한다.</li>
+        <li><b>보류 조건</b> — 사용량에 기온으로 설명되지 않는 변화가 감지된 기간은 금액을 확정하지 않는다. 양측이 영업시간·인원·설비 변경 사실을 확인한 뒤 기준을 재산정한다.</li>
+        <li><b>이견 처리</b> — 양측은 산출 근거와 월별 계산 내역을 동일하게 열람한다.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 시스템 구성 ─────────────────────────── -->
+  <section id="sS">
+    <div class="shead"><span class="sno">9</span><h2>시스템 구성</h2></div>
+    <p class="sdesc">공공데이터 3종이 들어와 화면까지 가는 경로입니다. 금액과 판정은 전부 서버가 계산하고, 외부 AI는 설명 문장만 다듬습니다. 외부 AI가 죽어도 정산은 멈추지 않습니다.</p>
+
+    <figure>
+      <svg viewBox="0 0 980 420" role="img"
+        aria-label="공공데이터 3종이 적재 단계를 거쳐 데이터베이스에 저장되고, 기저선 추정과 이상 감지, 정산 판정을 거쳐 화면 8단계로 전달되는 구성. 설명 문장은 캐시, 제미나이, 규칙 기반 템플릿 순으로 3단 폴백한다.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5"
+                  markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#4B5563"/>
+          </marker>
+        </defs>
+
+        <!-- 1열 : 공공데이터 -->
+        <text x="16" y="22" font-size="13" font-weight="600" fill="#4B5563">공공데이터</text>
+        <g font-size="14" fill="#111827">
+          <rect x="16" y="36" width="184" height="46" fill="#fff" stroke="#D1D5DB" rx="6"/>
+          <text x="28" y="56" font-weight="600">건축물대장</text>
+          <text x="28" y="72" font-size="12" fill="#4B5563">제원 · 사용승인일</text>
+
+          <rect x="16" y="94" width="184" height="46" fill="#fff" stroke="#D1D5DB" rx="6"/>
+          <text x="28" y="114" font-weight="600">건물에너지 사용량</text>
+          <text x="28" y="130" font-size="12" fill="#4B5563">월별 전기 · 가스</text>
+
+          <rect x="16" y="152" width="184" height="46" fill="#fff" stroke="#D1D5DB" rx="6"/>
+          <text x="28" y="172" font-weight="600">기상청 일자료</text>
+          <text x="28" y="188" font-size="12" fill="#4B5563">일평균기온</text>
+        </g>
+
+        <!-- 2열 : 적재 -->
+        <path d="M200 59 H250" stroke="#9CA3AF" marker-end="url(#ar)"/>
+        <path d="M200 117 H250" stroke="#9CA3AF" marker-end="url(#ar)"/>
+        <path d="M200 175 H250" stroke="#9CA3AF" marker-end="url(#ar)"/>
+        <rect x="252" y="36" width="150" height="162" fill="#F3F4F6" stroke="#D1D5DB" rx="8"/>
+        <text x="268" y="58" font-size="14" font-weight="700" fill="#111827">적재</text>
+        <text x="268" y="78" font-size="12" fill="#4B5563">load_data.py</text>
+        <g font-size="12" fill="#111827">
+          <text x="268" y="100">· 결측월 보존</text>
+          <text x="268" y="118">· 이상치 제외</text>
+          <text x="268" y="136">· 난방·냉방도일 산출</text>
+          <text x="268" y="162" font-weight="700">savebridge.db</text>
+          <text x="268" y="178" font-size="11" fill="#4B5563">테이블 5종</text>
+        </g>
+
+        <!-- 3열 : 분석 -->
+        <path d="M402 117 H452" stroke="#9CA3AF" marker-end="url(#ar)"/>
+        <rect x="454" y="36" width="178" height="162" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2" rx="8"/>
+        <text x="470" y="58" font-size="14" font-weight="700" fill="#1D4ED8">분석 · AI</text>
+        <text x="470" y="78" font-size="12" fill="#4B5563">baseline.py · measures.py</text>
+        <g font-size="12" fill="#111827">
+          <text x="470" y="100">· 기저선 추정 (회귀)</text>
+          <text x="470" y="118">· 학습 24 / 검증 12개월</text>
+          <text x="470" y="136">· 이상 감지</text>
+          <text x="470" y="154">· 건축물 진단</text>
+          <text x="470" y="172">· 개선 대책 산정</text>
+        </g>
+
+        <!-- 4열 : 판정 -->
+        <path d="M632 117 H682" stroke="#9CA3AF" marker-end="url(#ar)"/>
+        <rect x="684" y="36" width="178" height="162" fill="#fff" stroke="#D1D5DB" rx="8"/>
+        <text x="700" y="58" font-size="14" font-weight="700">정산 판정</text>
+        <text x="700" y="78" font-size="12" fill="#4B5563">main.py</text>
+        <g font-size="12">
+          <text x="700" y="100" fill="#4B5563">데이터 없음 →</text>
+          <text x="700" y="116" fill="#111827" font-weight="700">정산 불가</text>
+          <text x="700" y="136" fill="#4B5563">이상 감지 →</text>
+          <text x="700" y="152" fill="#DC2626" font-weight="700">검토 필요</text>
+          <text x="700" y="172" fill="#4B5563">공사 전 →</text>
+          <text x="700" y="188" fill="#1D4ED8" font-weight="700">추정</text>
+        </g>
+
+        <!-- 설명 생성 : 3단 폴백 -->
+        <path d="M543 198 V236" stroke="#9CA3AF" marker-end="url(#ar)"/>
+        <rect x="300" y="238" width="420" height="72" fill="#F8FAFC" stroke="#94A3B8" stroke-dasharray="4 3" rx="6"/>
+        <text x="316" y="258" font-size="13" font-weight="700" fill="#111827">설명 문장 — 3단 폴백</text>
+        <g font-size="12" fill="#111827">
+          <text x="316" y="280">캐시</text>
+          <text x="360" y="280" fill="#64748B">→</text>
+          <text x="382" y="280" font-weight="600" fill="#2563EB">Gemini</text>
+          <text x="440" y="280" fill="#64748B">→</text>
+          <text x="462" y="280">규칙 기반 템플릿</text>
+          <text x="316" y="298" font-size="11" fill="#DC2626">숫자를 만들거나 판정을 뒤집으면 폐기 · 금액은 서버 계산값만 사용</text>
+        </g>
+
+        <!-- 화면 -->
+        <path d="M510 310 V348" stroke="#9CA3AF" marker-end="url(#ar)"/>
+        <rect x="16" y="350" width="846" height="56" fill="#fff" stroke="#111827" stroke-width="2" rx="8"/>
+        <text x="32" y="372" font-size="14" font-weight="700">화면</text>
+        <text x="32" y="392" font-size="12" fill="#4B5563">web/index.html</text>
+        <g font-size="12" fill="#111827">
+          <text x="150" y="378">① 조회 → ② 판정 → ③ 진단 → ④ 대책 → ⑤ 기저선 → ⑥ 분배 → ⑦ 정산 → ⑧ 특약</text>
+          <text x="150" y="396" font-size="11" fill="#4B5563">서버 미연결 시 저장된 응답으로 전환 (화면에 상시 표시)</text>
+        </g>
+      </svg>
+      <figcaption class="key">외부 AI는 점선 안에만 관여합니다. 금액·판정·상태는 전부 실선 경로에서 결정됩니다.</figcaption>
+    </figure>
+
+    <table class="facts" style="margin-top:32px">
+      <tr><th>백엔드</th><td>FastAPI · SQLite · pandas · scikit-learn</td></tr>
+      <tr><th>화면</th><td>단일 HTML. 빌드·프레임워크·CDN 없음. 차트는 SVG 직접 생성</td></tr>
+      <tr><th>배포</th><td>같은 서버가 API와 화면을 함께 제공 — 별도 포트·CORS 설정 불필요</td></tr>
+      <tr><th>장애 대비</th><td>외부 AI 3단 폴백 · 서버 미연결 시 저장된 응답으로 전환</td></tr>
+      <tr><th>확장 방향</th><td>요금표 연동 · 건물 다건 · 공사 후 실측 검증 · 지자체 지원사업 연계</td></tr>
+    </table>
+  </section>
+
+  <footer>
+    <h3>데이터 출처</h3>
+    <ul>
+      <li>국토교통부 건축HUB 건축물대장정보 서비스 — 건물 제원·사용승인일</li>
+      <li>국토교통부 건물에너지 사용량 정보 — 월별 전기·가스 사용량 (단독주택·200세대 미만 공동주택 제외)</li>
+      <li>기상청 지상 일자료 — 일평균기온 (난방도일·냉방도일 산출)</li>
+    </ul>
+    <h3>산정 기준과 한계</h3>
+    <ul>
+      <li>기저선은 직접 관측할 수 없는 추정값입니다. 검증 지표와 평가 조건을 ③에 함께 표시합니다.</li>
+      <li>절감률 20%는 그린리모델링 이자지원사업 성능개선 요건, 전기요금 150원/kWh는 가정값입니다.</li>
+      <li>공사 전이므로 절감량 실측값은 존재하지 않습니다. 공사 후에는 가정값 자리에 기저선과 실측의 차이가 들어갑니다.</li>
+      <li>이상 감지 결과는 실제 공공데이터에서 확인된 값이며, 시연을 위해 만든 값이 아닙니다.</li>
+    </ul>
+    <p>세이브브릿지 · 제6회 그린리모델링 챌린지 대학생 해커톤 AI 플랫폼 아이디어 부문</p>
+  </footer>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════
+   API 호출은 전부 이 아래 api() 한 곳을 지난다.
+   화면마다 URL을 흩뿌리지 않는다. 금액 계산은 하지 않는다 —
+   전부 서버 응답을 그대로 표시한다.
+   ══════════════════════════════════════════════════════ */
+
+const API = location.port === '8000' || location.protocol === 'file:'
+  ? (location.protocol === 'file:' ? 'http://localhost:8000' : '')
+  : 'http://localhost:8000';
+
+let BACKUP = null;          // 백업 스냅샷 (서버 미연결 시)
+let useBackup = false;
+
+async function api(path){
+  if(useBackup) return fromBackup(path);
+  const res = await fetch(API + path, {headers:{'Accept':'application/json'}});
+  if(!res.ok){
+    let detail = res.statusText;
+    try{ detail = (await res.json()).detail || detail; }catch(e){}
+    const err = new Error(detail); err.status = res.status; throw err;
+  }
+  return res.json();
+}
+async function apiPost(path, body){
+  if(useBackup) return fromBackup(path, body);
+  const res = await fetch(API + path, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if(!res.ok){
+    let detail = res.statusText;
+    try{
+      const j = await res.json();
+      detail = typeof j.detail === 'string' ? j.detail
+             : (j.detail?.[0]?.msg || detail);
+    }catch(e){}
+    const err = new Error(detail); err.status = res.status; throw err;
+  }
+  return res.json();
+}
+
+/* ── 상태 — 새로고침해도 흐름이 끊기지 않게 보관 ── */
+const S = Object.assign({
+  bld_id:null, owner_ratio:0.7, period_years:10, invest_won:50000000,
+  year:null, quarter:null
+}, JSON.parse(sessionStorage.getItem('ss') || '{}'));
+const save = () => sessionStorage.setItem('ss', JSON.stringify(S));
+
+/* ── 표시 도우미 ── */
+const won  = n => (n==null ? '—' : Number(n).toLocaleString('ko-KR'));
+const kwh  = n => (n==null ? '—' : Math.round(n).toLocaleString('ko-KR'));
+const pct  = n => (n*100).toFixed(0) + '%';
+const ymTxt= s => `${s.slice(0,4)}.${s.slice(4,6)}`;
+const esc  = s => String(s==null?'':s).replace(/[&<>"]/g,
+             c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const PV = {m:'<span class="pv pv-m">실측</span>',
+            p:'<span class="pv pv-p">예측</span>',
+            a:'<span class="pv pv-a">가정</span>'};
+
+function setState(el, html, cls=''){ el.className = 'state '+cls; el.innerHTML = html; }
+function loading(el, what){ setState(el, `<div class="skel" style="width:${what}%"></div>`); }
+
+function failure(el, err, retry){
+  const msg = err.status === 404 ? '해당하는 데이터가 없습니다.'
+            : err.status === 400 ? esc(err.message)
+            : err.status ? esc(err.message)
+            : '서버에 연결할 수 없습니다. 터미널에서 uvicorn이 실행 중인지 확인하세요.';
+  setState(el, `<b>${err.status ? '요청 실패 ('+err.status+')' : '연결 실패'}</b>${msg}
+    <div><button class="ghost" data-retry="1">다시 시도</button>
+    ${err.status ? '' : '<button class="ghost" data-backup="1">백업 스냅샷 보기</button>'}</div>`, 'err');
+  el.querySelector('[data-retry]')?.addEventListener('click', retry);
+  el.querySelector('[data-backup]')?.addEventListener('click', () => {
+    useBackup = true;
+    document.getElementById('backupBanner').classList.add('on');
+    mark(false, '저장된 응답');
+    findBuilding();
+  });
+}
+
+function mark(up, txt){
+  const d = document.getElementById('connDot'), t = document.getElementById('connTxt');
+  d.className = 'dot ' + (up ? 'up' : 'down');
+  t.textContent = txt;
+}
+
+/* ══ ① 건물 조회 ══════════════════════════════════ */
+const bldOut = document.getElementById('bldOut');
+
+async function findBuilding(){
+  const q = new URLSearchParams({
+    sigungu: document.getElementById('sigungu').value.trim(),
+    bjdong:  document.getElementById('bjdong').value.trim(),
+    bun:     document.getElementById('bun').value.trim(),
+    ji:      document.getElementById('ji').value.trim(),
+  });
+  if([...q.values()].some(v => !v)){
+    setState(bldOut, '<b>코드가 비어 있습니다</b>시군구·법정동·본번·부번을 모두 채워주세요.', 'err');
+    return;
+  }
+  loading(bldOut, 70);
+  try{
+    const b = await api('/api/building?' + q);
+    mark(true, useBackup ? '저장된 응답' : '서버 연결됨');
+    S.bld_id = b.bld_id; save();
+    const ua = b.use_apr_day;
+    bldOut.className = '';
+    bldOut.innerHTML = `<table class="facts">
+      <tr><th>대지위치</th><td>${esc(b.addr)}</td></tr>
+      <tr><th>주용도</th><td>${esc(b.purpose)}</td></tr>
+      <tr><th>연면적</th><td class="num">${b.area.toLocaleString('ko-KR')} m²</td></tr>
+      <tr><th>구조</th><td>${esc(b.struct)}</td></tr>
+      <tr><th>층수</th><td>${esc(b.floors)}</td></tr>
+      <tr><th>사용승인일</th><td class="num">${ua.slice(0,4)}.${ua.slice(4,6)}.${ua.slice(6)}</td></tr>
+    </table>`;
+    loadEligibility(); loadDiagnosis(); loadBaseline(); loadCases();
+  }catch(e){
+    if(!e.status) mark(false, '서버 미연결');
+    failure(bldOut, e, findBuilding);
+  }
+}
+document.getElementById('btnFind').addEventListener('click', findBuilding);
+
+/* ══ ② 대상 판정 ══════════════════════════════════ */
+const eligOut = document.getElementById('eligOut');
+
+async function loadEligibility(){
+  loading(eligOut, 85);
+  try{
+    const d = await api('/api/eligibility?bld_id=' + S.bld_id);
+    eligOut.className = '';
+    eligOut.innerHTML = `
+      <ul class="chk">${d.checks.map(c => `
+        <li>
+          <span class="m ${c.ok?'y':'n'}">${c.ok?'✓':'✕'}</span>
+          <span><span class="nm">${esc(c.name)}</span><div class="pg">${esc(c.program)}</div></span>
+          <span class="dt">${esc(c.detail)}</span>
+        </li>`).join('')}</ul>
+      <div class="verdictline ${d.eligible?'':'no'}">${esc(d.msg)}</div>`;
+  }catch(e){ failure(eligOut, e, loadEligibility); }
+}
+
+/* ══ 건축물 진단 ══════════════════════════════════ */
+const diagOut = document.getElementById('diagOut');
+const measOut = document.getElementById('measOut');
+let PICKED = null;      // 선택한 개선 대책 id 목록
+
+async function loadDiagnosis(){
+  loading(diagOut, 90);
+  try{
+    const d = await api('/api/profile?bld_id=' + S.bld_id);
+    const ys = d.years;
+    const max = Math.max(...ys.map(y => y.total));
+
+    diagOut.className = '';
+    diagOut.innerHTML = `
+      <table class="facts yrs">
+        <thead><tr><th>연도</th><th class="r">전기 kWh</th><th class="r">가스 kWh</th>
+          <th class="r">합계 kWh</th><th class="r">kWh/m²</th><th></th></tr></thead>
+        <tbody>${ys.map(y => `
+          <tr><td class="num">${y.year}${y.annualized
+                ? ` <span class="tiny">연환산 ${y.months}개월</span>` : ''}</td>
+            <td class="r num">${kwh(y.elec)}</td>
+            <td class="r num">${kwh(y.gas)}</td>
+            <td class="r num"><b>${kwh(y.total)}</b></td>
+            <td class="r num">${y.intensity}</td>
+            <td style="width:34%"><span class="ybar" style="width:${y.total/max*100}%"></span></td>
+          </tr>`).join('')}</tbody>
+      </table>
+
+      <h3 class="sub3">데이터로 확인된 것</h3>
+      <ul class="finds">${d.findings.map(f => `
+        <li>
+          <div class="ft"><span class="pv pv-m">실측</span>${esc(f.title)}</div>
+          <p class="fd">${esc(f.detail)}</p>
+          ${f.implication ? `<p class="fi">${esc(f.implication)}</p>` : ''}
+          ${f.action ? `<p class="fa">확인 필요 — ${esc(f.action)}</p>` : ''}
+        </li>`).join('')}</ul>
+
+      <h3 class="sub3">현장 확인이 필요한 것</h3>
+      <table class="facts">
+        ${d.unverified.map(u => `<tr>
+          <th>${esc(u.item)}</th>
+          <td>${esc(u.why)}<div class="tiny">→ ${esc(u.how)}</div></td>
+        </tr>`).join('')}
+      </table>
+      <p class="hint">${esc(d.note)}</p>`;
+
+    loadMeasures();
+  }catch(e){ failure(diagOut, e, loadDiagnosis); }
+}
+
+/* ══ 개선 대책 → 절감량 → 온실가스 ═════════════════ */
+async function loadMeasures(){
+  loading(measOut, 80);
+  try{
+    const qs = PICKED ? '&ids=' + PICKED.join(',') : '';
+    const d = await api(`/api/measures?bld_id=${S.bld_id}${qs}`);
+    if(!d.available){
+      setState(measOut, `<b>산출 불가</b>${esc(d.reason)}`, 'err'); return;
+    }
+    if(PICKED === null) PICKED = d.measures.map(m => m.id);
+
+    const [klo, khi] = d.total_saving_kwh;
+    const [nlo, nhi] = d.naive_sum_kwh;
+    const [olo, ohi] = d.overlap_adjust_kwh;
+    const [rlo, rhi] = d.total_saving_rate;
+    const [clo, chi] = d.total_co2_kg;
+    const ef = d.emission_factors;
+
+    measOut.className = '';
+    measOut.innerHTML = `
+      ${d.warnings.length ? `<div class="warnbox">
+        <b>본선 전 확인 필요</b>
+        <ul>${d.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>
+      </div>` : ''}
+
+      <div class="tscroll">
+      <table class="mtbl meas">
+        <thead><tr><th>개선 대책</th><th>대상</th><th class="r">절감률</th>
+          <th class="r">에너지 절감 kWh/년</th><th class="r">온실가스 kgCO₂e/년</th></tr></thead>
+        <tbody>${d.measures.map(m => `
+          <tr>
+            <td><label class="pick">
+              <input type="checkbox" data-id="${m.id}" ${PICKED.includes(m.id)?'checked':''}>
+              <span>${esc(m.name)}</span></label>
+              ${m.needs_survey ? `<div class="nt">${esc(m.survey_note)}</div>` : ''}</td>
+            <td>${esc(m.addresses)}<div class="tiny">${esc(m.fuel)}</div></td>
+            <td class="r num">${pct(m.rate_range[0])}~${pct(m.rate_range[1])}
+              <div class="tiny">${m.source_missing
+                ? '<span class="miss">출처 미기재</span>' : esc(m.source)}</div></td>
+            <td class="r num">${kwh(m.saving_kwh_low)} ~ ${kwh(m.saving_kwh_high)}</td>
+            <td class="r num">${kwh(m.co2_kg_low)} ~ ${kwh(m.co2_kg_high)}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+      </div>
+
+      <div class="totbox">
+        <div><div class="k">연간 에너지 절감량</div>
+          <div class="v num">${kwh(klo)} ~ ${kwh(khi)}<em> kWh</em></div>
+          <div class="c">${d.base_year}년 사용량 대비 ${pct(rlo)} ~ ${pct(rhi)}</div></div>
+        <div><div class="k">연간 온실가스 감축량</div>
+          <div class="v num">${(clo/1000).toFixed(1)} ~ ${(chi/1000).toFixed(1)}<em> tCO₂e</em></div>
+          <div class="c">${kwh(clo)} ~ ${kwh(chi)} kgCO₂e</div></div>
+      </div>
+      <div class="adj">
+        <div class="ah">합계를 어떻게 냈는가</div>
+        <div class="arow">
+          <span class="al">대책별 절감량을 그냥 더하면</span>
+          <span class="av num strike">${kwh(nlo)} ~ ${kwh(nhi)} kWh</span>
+        </div>
+        <div class="arow">
+          <span class="al">같은 연료에 겹치는 만큼 빼면</span>
+          <span class="av num minus">${kwh(olo)} ~ ${kwh(ohi)} kWh 차감</span>
+        </div>
+        <div class="arow tot">
+          <span class="al">적용한 값</span>
+          <span class="av num">${kwh(klo)} ~ ${kwh(khi)} kWh</span>
+        </div>
+        <p class="key">${esc(d.method)}</p>
+      </div>
+      <p class="hint">${PV.a} 절감률은 문헌 기반 범위이며 이 건물에서 실측한 값이 아닙니다.</p>
+
+      <details>
+        <summary>적용한 배출계수</summary>
+        <table class="facts">
+          ${Object.values(ef).map(f => `<tr>
+            <th>${esc(f.name)}</th>
+            <td><span class="num">${f.value} ${esc(f.unit)}</span>
+              ${f.verified ? '' : ' <span class="miss">미확인</span>'}
+              <div class="tiny">${esc(f.source)} · 기준연도 ${esc(f.base_year)}</div></td>
+          </tr>`).join('')}
+        </table>
+      </details>
+
+      <details>
+        <summary>이 수치의 한계</summary>
+        <ul class="lims">${d.limits.map(l => `<li>${esc(l)}</li>`).join('')}</ul>
+      </details>`;
+
+    measOut.querySelectorAll('input[type=checkbox]').forEach(cb =>
+      cb.addEventListener('change', () => {
+        PICKED = [...measOut.querySelectorAll('input:checked')].map(x => x.dataset.id);
+        loadMeasures();
+      }));
+  }catch(e){ failure(measOut, e, loadMeasures); }
+}
+
+/* ══ ③ 기저선 추정 ════════════════════════════════ */
+const baseOut = document.getElementById('baseOut');
+let BASE = null;
+
+async function loadBaseline(){
+  loading(baseOut, 95);
+  try{
+    const d = await api('/api/baseline?bld_id=' + S.bld_id);
+    BASE = d;
+    const m = d.metrics, w = d.eval_window, sb = d.saving_basis;
+    const cvPass = m.cv_rmse <= 15, r2Pass = m.r2 >= 0.75;
+
+    baseOut.className = '';
+    baseOut.innerHTML = `
+      <div class="mx">
+        <div><div class="k">예측 오차 CV(RMSE)</div>
+          <div class="v num">${m.cv_rmse}%</div>
+          <div class="c ${cvPass?'pass':'fail'}">기준 15% 이하 · ${cvPass?'충족':'미달'}</div></div>
+        <div><div class="k">설명력 R²</div>
+          <div class="v num">${m.r2}</div>
+          <div class="c ${r2Pass?'pass':'fail'}">기준 0.75 이상 · ${r2Pass?'충족':'미달'}</div></div>
+        <div><div class="k">12개월 합계 오차</div>
+          <div class="v num">${m.annual_error > 0 ? '+' : ''}${m.annual_error}%</div>
+          <div class="c">월별 오차는 연 단위로 상쇄됩니다</div></div>
+      </div>
+      <div class="verdictline ${d.verdict === 'CONFIRMED' ? '' : 'no'}">${esc(d.verdict_msg)}</div>
+
+      <div class="keys" style="margin-top:40px">
+        <span><i style="border-color:var(--ink)"></i>실측 사용량</span>
+        <span><i style="border-color:var(--owner);border-top-style:dashed"></i>기저선 추정</span>
+        <span><i style="border-color:var(--seal);border-top-width:7px"></i>이상 감지 구간</span>
+      </div>
+      <figure>${lineChart(d.monthly_baseline, d.anomalies)}
+        <figcaption>모델이 학습에 쓴 구간과 보지 않은 구간을 나눠 표시했습니다. 검증 구간의 벌어짐이 위 오차 지표입니다.</figcaption>
+      </figure>
+
+      <details>
+        <summary>검증 조건 — 이 숫자가 어떤 조건에서 나왔는지</summary>
+        <table class="facts">
+          <tr><th>학습 구간</th><td class="num">${esc(w.train)} (${w.train_months}개월)</td></tr>
+          <tr><th>검증 구간</th><td class="num">${esc(w.valid)} (${w.valid_months}개월) — 모델이 보지 않은 구간</td></tr>
+          <tr><th>전체 확보</th><td class="num">${w.total_months}개월</td></tr>
+          <tr><th>산정 기준</th><td>${esc(w.basis)}</td></tr>
+          <tr><th>설명 변수</th><td>${esc(w.inputs)}</td></tr>
+          <tr><th>모델</th><td>${esc(w.model)}</td></tr>
+          <tr><th>판정 기준</th><td>${esc(w.criteria)}</td></tr>
+        </table>
+      </details>
+
+      <details>
+        <summary>절감액 산정 근거 — 어디까지가 실측이고 어디부터가 가정인지</summary>
+        <table class="facts">
+          <tr><th>산식</th><td>${esc(sb.formula)}</td></tr>
+          <tr><th>최근 12개월</th><td>${PV.m}<span class="num">${kwh(sb.annual_kwh)} kWh</span></td></tr>
+          <tr><th>절감률</th><td>${PV.a}<span class="num">${pct(sb.saving_rate)}</span> — 이자지원사업 성능개선 요건</td></tr>
+          <tr><th>단가</th><td>${PV.a}<span class="num">${won(sb.price_per_kwh)}원/kWh</span></td></tr>
+          <tr><th>연간 절감액</th><td><span class="num">${won(d.annual_saving_won)}원</span>
+            <div class="pg" style="font-size:14px;color:var(--dim); margin-top:4px;">90% 구간 ${won(d.ci_low_won)} ~ ${won(d.ci_high_won)}원</div></td></tr>
+          <tr><th>한계</th><td style="font-weight:400;color:var(--dim)">${esc(sb.note)}</td></tr>
+        </table>
+      </details>
+
+      <div class="legend">
+        <span>${PV.m}공공데이터에서 받은 값</span>
+        <span>${PV.p}모델이 추정한 값</span>
+        <span>${PV.a}근거를 밝힌 가정값</span>
+      </div>`;
+
+    initAllocation();
+  }catch(e){ failure(baseOut, e, loadBaseline); }
+}
+
+/* 실측 vs 기저선 — SVG 직접 그림 (라이브러리·CDN 없음) */
+function lineChart(rows, anomalies){
+  const W = 900, H = 260, L = 56, R = 12, T = 26, B = 34;
+  const iw = W - L - R, ih = H - T - B;
+  const vals = rows.flatMap(r => [r.actual, r.baseline]);
+  const max = Math.max(...vals) * 1.08, min = 0;
+  const x = i => L + (rows.length === 1 ? iw/2 : i * iw / (rows.length - 1));
+  const y = v => T + ih - (v - min) / (max - min) * ih;
+  const anom = new Set(anomalies.map(a => a.ym));
+
+  // 학습/검증/적용 구간 띠
+  const bands = [];
+  let st = 0;
+  for(let i = 1; i <= rows.length; i++){
+    if(i === rows.length || rows[i].phase !== rows[st].phase){
+      bands.push({phase: rows[st].phase, a: st, b: i - 1});
+      st = i;
+    }
+  }
+  const fills = {'학습':'#F3F4F6', '검증':'#FFFFFF', '적용':'#F9FAFB'};
+
+  const path = k => rows.map((r,i) => (i?'L':'M') + x(i).toFixed(1) + ' ' + y(r[k]).toFixed(1)).join(' ');
+  const ticks = [0, .25, .5, .75, 1].map(f => Math.round(max * f));
+
+  return `<svg viewBox="0 0 ${W} ${H}" role="img"
+      aria-label="월별 실측 사용량과 기저선 추정값 비교. 학습 구간, 모델이 보지 않은 검증 구간, 적용 구간으로 나뉩니다.">
+    ${bands.map(b => `<rect x="${x(b.a)}" y="${T}" width="${Math.max(1,x(b.b)-x(b.a))}" height="${ih}"
+        fill="${fills[b.phase]}"/>`).join('')}
+    ${bands.map(b => `<text x="${(x(b.a)+x(b.b))/2}" y="${T-9}" text-anchor="middle"
+        font-size="12" font-weight="500" fill="#6B7280">${b.phase} ${b.b-b.a+1}개월</text>`).join('')}
+    ${ticks.map(t => `<g><line x1="${L}" x2="${W-R}" y1="${y(t)}" y2="${y(t)}"
+        stroke="#E5E7EB" stroke-width="1" ${t?'stroke-dasharray="2 3"':''}/>
+      <text x="${L-9}" y="${y(t)+4}" text-anchor="end" font-size="11" fill="#6B7280">
+        ${(t/1000).toFixed(0)}k</text></g>`).join('')}
+    ${rows.map((r,i) => anom.has(r.ym) ? `<rect x="${x(i)-4}" y="${T}" width="8" height="${ih}"
+        fill="#DC2626" opacity=".1"/>` : '').join('')}
+    <path d="${path('baseline')}" fill="none" stroke="#2563EB" stroke-width="2.5"
+          stroke-dasharray="6 5" stroke-linejoin="round"/>
+    <path d="${path('actual')}" fill="none" stroke="#111827" stroke-width="2.5" stroke-linejoin="round"/>
+    ${rows.map((r,i) => anom.has(r.ym)
+        ? `<circle cx="${x(i)}" cy="${y(r.actual)}" r="4.5" fill="#DC2626"/>` : '').join('')}
+    ${rows.map((r,i) => (r.ym.slice(4) === '01')
+        ? `<text x="${x(i)}" y="${H-10}" text-anchor="middle" font-size="11" font-weight="600" fill="#4B5563">
+             ${r.ym.slice(0,4)}</text>` : '').join('')}
+    <text x="${L-9}" y="${T-9}" text-anchor="end" font-size="11" fill="#6B7280">kWh</text>
+  </svg>`;
+}
+
+/* ══ ④ 분배 시뮬레이터 ════════════════════════════ */
+const allocOut = document.getElementById('allocOut');
+
+function initAllocation(){
+  allocOut.className = '';
+  allocOut.innerHTML = `
+    <div class="simgrid">
+      <div>
+        <div class="ctl">
+          <label for="inv">개선 공사비</label>
+          <input id="inv" type="number" min="1000000" step="1000000" value="${S.invest_won}">
+          <div class="hint num" id="invLab" style="margin-top:8px"></div>
+        </div>
+        <div class="ctl">
+          <div class="lab"><b>건물주 몫</b><span id="orLab" class="num">${pct(S.owner_ratio)}</span></div>
+          <input id="or" type="range" min="5" max="95" step="5" value="${S.owner_ratio*100}"
+                 aria-label="건물주 분배율">
+        </div>
+        <div class="ctl">
+          <div class="lab"><b>분배 기간</b><span id="pyLab" class="num">${S.period_years}년</span></div>
+          <input id="py" type="range" min="1" max="30" step="1" value="${S.period_years}"
+                 aria-label="분배 기간">
+        </div>
+      </div>
+      <div id="allocView"><div class="skel" style="width:60%"></div></div>
+    </div>`;
+
+  const inv = document.getElementById('inv');
+  const or  = document.getElementById('or');
+  const py  = document.getElementById('py');
+
+  let timer = null;
+  const push = () => {
+    S.invest_won   = Math.max(1, parseInt(inv.value || 0, 10));
+    S.owner_ratio  = parseInt(or.value, 10) / 100;
+    S.period_years = parseInt(py.value, 10);
+    const eok = Math.round(S.invest_won / 100000000), man = Math.round(S.invest_won % 100000000 / 10000);
+    document.getElementById('invLab').textContent =
+      won(S.invest_won) + '원' + (eok || man ? `  (${eok?eok+'억 ':''}${man?man.toLocaleString('ko-KR')+'만':''})` : '');
+    document.getElementById('orLab').textContent = pct(S.owner_ratio);
+    document.getElementById('pyLab').textContent = S.period_years + '년';
+    document.getElementById('dOwner').textContent  = pct(S.owner_ratio);
+    document.getElementById('dTenant').textContent = pct(1 - S.owner_ratio);
+    document.getElementById('dYears').textContent  = S.period_years + '년';
+    save();
+    clearTimeout(timer);
+    timer = setTimeout(runAllocation, 110);   // 서버가 모든 금액을 계산한다
+  };
+  [inv, or, py].forEach(el => el.addEventListener('input', push));
+  push();
+}
+
+async function runAllocation(){
+  const view = document.getElementById('allocView');
+  if(!view) return;
+  try{
+    const d = await apiPost('/api/allocation', {
+      bld_id: S.bld_id, invest_won: S.invest_won,
+      owner_ratio: S.owner_ratio, period_years: S.period_years
+    });
+
+    const oPct = d.owner_ratio * 100;
+    const need = Math.min(100, Math.max(0, d.required_owner_ratio * 100));
+    const showThresh = d.required_owner_ratio <= 1;
+
+    view.innerHTML = `
+      <div class="splitwrap">
+        <div class="split">
+          <div class="o" style="flex:0 0 ${oPct}%">
+            <span class="who">건물주 · 연간</span>
+            <span class="amt num">${won(d.owner_annual_won)}원</span>
+            <span class="per num">${pct(d.owner_ratio)}</span>
+          </div>
+          <div class="t" style="flex:0 0 ${100-oPct}%">
+            <span class="who">임차인 · 연간</span>
+            <span class="amt num">${won(d.tenant_annual_won)}원</span>
+            <span class="per num">${pct(1-d.owner_ratio)}</span>
+          </div>
+        </div>
+        <div class="thresh ${showThresh?'':'off'}" style="left:${need}%">
+          <span class="tag">회수선 ${need.toFixed(0)}%</span><span class="ln"></span>
+        </div>
+      </div>
+
+      <div class="callout ${d.recovered ? 'good' : (d.feasible ? '' : 'warn')}">
+        ${esc(d.feasibility_msg)}
+      </div>
+
+      <div class="sub">
+        <span>연간 절감액<b class="num">${won(d.annual_saving_won)}원</b></span>
+        <span>건물주 ${d.period_years}년 누적<b class="num">${won(d.owner_total_won)}원</b></span>
+        <span>임차인 월 평균<b class="num">${won(d.tenant_monthly_won)}원</b></span>
+        <span>회수율<b class="num">${pct(d.recovery_rate)}</b></span>
+        ${d.min_period_years ? `<span>100% 몫 최소 기간<b class="num">${d.min_period_years}년</b></span>` : ''}
+      </div>
+      <p class="hint">절감액은 ${PV.a}가정값에 기반합니다. 산정 근거는 ③의 ‘절감액 산정 근거’에서 볼 수 있습니다.</p>`;
+  }catch(e){ failure(view, e, runAllocation); }
+}
+
+/* ══ ⑤ 정산 리포트 ════════════════════════════════ */
+const setlOut  = document.getElementById('setlOut');
+const caseBar  = document.getElementById('caseBar');
+
+async function loadCases(){
+  try{
+    const d = await api('/api/demo');
+    caseBar.innerHTML = d.cases.map((c,i) => `
+      <button data-y="${c.year}" data-q="${c.quarter}" aria-pressed="false"
+        title="${esc(c.note)}">${esc(c.period)} · ${esc(c.label)}</button>`).join('') +
+      `<button data-y="2026" data-q="3" aria-pressed="false"
+        title="데이터가 아직 공개되지 않은 분기">2026 3분기 · 데이터 없음</button>`;
+    caseBar.querySelectorAll('button').forEach(b =>
+      b.addEventListener('click', () => {
+        S.year = +b.dataset.y; S.quarter = +b.dataset.q; save();
+        caseBar.querySelectorAll('button').forEach(x =>
+          x.setAttribute('aria-pressed', String(x === b)));
+        loadSettlement();
+      }));
+    const first = caseBar.querySelector('button');
+    if(S.year == null){ first?.click(); }
+    else {
+      const m = caseBar.querySelector(`[data-y="${S.year}"][data-q="${S.quarter}"]`);
+      (m || first)?.click();
+    }
+  }catch(e){ failure(caseBar, e, loadCases); }
+}
+
+async function loadSettlement(){
+  loading(setlOut, 90);
+  try{
+    const q = new URLSearchParams({
+      bld_id:S.bld_id, year:S.year, quarter:S.quarter, owner_ratio:S.owner_ratio
+    });
+    const d = await api('/api/settlement?' + q);
+
+    // 상태 코드로 모양을 정한다. 라벨 문자열에 의존하지 않는다.
+    const cls = {VERIFIED:'fix', PROVISIONAL:'', ESTIMATED:'est',
+                 REVIEW_REQUIRED:'hold', INSUFFICIENT_DATA:'none'}[d.status_code] ?? '';
+
+    // 금액이 없을 때는 분배를 보여주지 않는다.
+    const hasAmt = d.saving_won !== null && d.saving_won !== undefined;
+    const body = !hasAmt ? '' : `
+      <div class="shares">
+        <div class="o"><div class="who">건물주 ${pct(d.owner_ratio)}</div>
+          <div class="amt num">${won(d.owner_won)}원</div></div>
+        <div class="t"><div class="who">임차인 ${pct(1-d.owner_ratio)}</div>
+          <div class="amt num">${won(d.tenant_won)}원</div></div>
+      </div>`;
+
+    setlOut.className = '';
+    setlOut.innerHTML = `
+      <div class="report">
+        <div class="rtop">
+          <div class="stamp ${cls}">
+            <div class="s">${esc(d.status)}</div>
+            <div class="q">${esc(d.period)}</div>
+          </div>
+          <div class="rsum">
+            ${hasAmt
+              ? `<div class="total num">${won(d.saving_won)}<em> 원</em></div>
+                 <span class="pv pv-a" style="margin-top:8px">${esc(d.amount_state)}</span>`
+              : `<div class="total nil">금액 없음</div>`}
+            <div class="msg key">${esc(d.amount_note)}</div>
+            <div class="msg">${esc(d.status_msg)}</div>
+          </div>
+        </div>
+        ${body}
+        <div class="tscroll"><table class="mtbl">
+          <thead><tr><th>기간</th><th>상태</th><th class="r">기저선 kWh</th>
+            <th class="r">실측 kWh</th><th class="r">정산액</th></tr></thead>
+          <tbody>${d.months.map(m => {
+            const st = m.state === '정산' ? 'ok' : m.state === '확인 중' ? 'fl' : 'nd';
+            const tr = m.state === '확인 중' ? 'flagged' : m.saving_won == null ? 'nodata' : '';
+            return `<tr class="${tr}">
+              <td class="num" style="font-weight:600">${ymTxt(m.ym)}</td>
+              <td><span class="st ${st}">${esc(m.state)}</span>
+                ${m.note ? `<div class="nt">${esc(m.note)}</div>` : ''}</td>
+              <td class="r num">${m.baseline_kwh != null ? kwh(m.baseline_kwh) : '—'}</td>
+              <td class="r num">${m.actual_kwh != null ? kwh(m.actual_kwh) : '—'}</td>
+              <td class="r num" style="font-weight:600">${m.saving_won == null ? '—' : won(m.saving_won)+'원'}</td>
+            </tr>`;}).join('')}</tbody>
+        </table></div>
+        <div class="ai" id="aiBox"><div class="skel" style="width:45%"></div></div>
+      </div>
+      <div class="legend" style="margin-top:24px;">
+        <span>${PV.p}기저선 — 모델이 추정한 값</span>
+        <span>${PV.m}실측 — 공공데이터에서 받은 값</span>
+        <span>${PV.a}정산액 — 절감률·단가 가정을 적용한 값</span>
+      </div>`;
+
+    loadExplain(d);
+  }catch(e){ failure(setlOut, e, loadSettlement); }
+}
+
+async function loadExplain(setl){
+  const box = document.getElementById('aiBox');
+  if(!box) return;
+  // 설명할 달: 이상이 있으면 그 달, 없으면 분기 마지막 달
+  const flagged = setl.months.find(m => m.state === '확인 중');
+  const withData = setl.months.filter(m => m.saving_won != null);
+  const target = flagged || withData[withData.length-1];
+  if(!target){
+    box.innerHTML = `<div class="h"><b>AI 설명</b></div>
+      <p>정산할 데이터가 없어 설명할 내용이 없습니다.</p>`;
+    return;
+  }
+  try{
+    const d = await api(`/api/explain?bld_id=${S.bld_id}&ym=${target.ym}`);
+    const src = d.source === 'gemini' ? 'Gemini 생성'
+              : d.source === 'cache'  ? 'Gemini 생성 (캐시)'
+              : '규칙 기반 문장';
+    box.innerHTML = `
+      <div class="h"><b>AI 설명 — ${ymTxt(d.ym)} · ${esc(d.action)}</b>
+        <span class="src">${esc(src)}</span></div>
+      <p>${esc(d.text)}</p>`;
+  }catch(e){
+    box.innerHTML = `<div class="h"><b>AI 설명</b></div>
+      <p style="color:var(--dim)">설명을 불러오지 못했습니다. 위의 월별 내역과 판정 사유는 그대로 유효합니다.</p>`;
+  }
+}
+
+/* ══ 백업 스냅샷 ══════════════════════════════════ */
+function fromBackup(path, body){
+  if(!BACKUP) throw new Error('백업 스냅샷이 없습니다');
+  const [p, qs] = path.split('?');
+  const q = new URLSearchParams(qs || '');
+  if(p === '/api/building')    return BACKUP.building;
+  if(p === '/api/eligibility') return BACKUP.eligibility;
+  if(p === '/api/baseline')    return BACKUP.baseline;
+  if(p === '/api/demo')        return BACKUP.demo;
+  if(p === '/api/profile')     return BACKUP.profile;
+  if(p === '/api/measures'){
+    const ids = (q.get('ids') || '').split(',').filter(Boolean);
+    const all = BACKUP.measures;
+    if(!ids.length || ids.length === all.measures.length) return all;
+    const e = new Error('백업에서는 대책 선택을 바꿀 수 없습니다'); e.status = 409; throw e;
+  }
+  if(p === '/api/allocation'){
+    const r = body.owner_ratio;
+    return BACKUP.allocation.reduce((a,b) =>
+      Math.abs(b.owner_ratio-r) < Math.abs(a.owner_ratio-r) ? b : a);
+  }
+  if(p === '/api/settlement'){
+    const k = `${q.get('year')}Q${q.get('quarter')}`;
+    const s = BACKUP.settlement[k];
+    if(!s){ const e = new Error('백업에 없는 분기입니다'); e.status = 404; throw e; }
+    return s;
+  }
+  if(p === '/api/explain'){
+    return BACKUP.explain[q.get('ym')] ||
+      {ym:q.get('ym'), action:'—', text:'백업 스냅샷에 이 달의 설명이 없습니다.', source:'backup'};
+  }
+  const e = new Error('백업에 없는 경로'); e.status = 404; throw e;
+}
+
+/* ══ 기동 ══════════════════════════════════════════ */
+(async function boot(){
+  try{ BACKUP = await (await fetch('backup.json')).json(); }catch(e){}
+
+  try{
+    await api('/api/demo');
+    mark(true, '서버 연결됨');
+  }catch(e){
+    if(BACKUP){
+      useBackup = true;
+      document.getElementById('backupBanner').classList.add('on');
+      mark(false, '저장된 응답');
+    }else{
+      mark(false, '서버 미연결');
+    }
+  }
+  findBuilding();
+})();
+
+/* 상단 바 현재 위치 표시 */
+const links = [...document.querySelectorAll('#nav a')];
+const obs = new IntersectionObserver(es => {
+  es.forEach(e => {
+    if(e.isIntersecting) links.forEach(a =>
+      a.setAttribute('aria-current', String(a.hash === '#' + e.target.id)));
+  });
+}, {rootMargin:'-70px 0px -70% 0px'});
+['sU','s1','s2','sD','sM','s3','s4','s5','sS'].forEach(id => {
+  const el = document.getElementById(id); if(el) obs.observe(el);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "세이빙 셰어 — 그린리모델링 절감액 정산",
+  "short_name": "세이빙 셰어",
+  "description": "절감액을 검증하고 임대인·임차인이 나누는 정산 플랫폼",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#FAFAF7",
+  "theme_color": "#10192B",
+  "lang": "ko",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml"}
+  ]
+}
