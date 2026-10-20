@@ -128,6 +128,9 @@ def judge(metrics):
 
     if cv_ok and r2_ok:
         return "CONFIRMED", "기저선 모델이 예측 오차·설명력 기준을 모두 충족했습니다"
+    # 기준 미달(RANGE)일 때 기저선 오차를 금액에서 빼는 계산은 없다.
+    # 금액을 확정하지 않고 90% 구간과 함께 '추정'으로 제시한다는 뜻의 안내 문구다.
+    # 화면에 나가는 금액·구간은 backend(pricing.py)가 계산해서 덮어쓴다.
     return "RANGE", (f"예측 오차 {metrics['cv_rmse']}% (기준 {CV_LIMIT}% 이하) · "
                     f"설명력 {metrics['r2']} (기준 {R2_LIMIT} 이상) — "
                     f"기준 미달이므로 금액을 확정하지 않고 추정 범위(90% 구간)와 함께 제시합니다")
