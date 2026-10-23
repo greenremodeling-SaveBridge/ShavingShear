@@ -4,7 +4,7 @@
    서버에 닿지 않으면 backup.json(저장된 시연 데이터)으로 답한다.
    ══════════════════════════════════════════════════════ */
 import { won, stampTime } from './format.js';
-import EMBEDDED from '../../../web/backup.json';
+import EMBEDDED from './backup.json';
 
 // 미리보기 빌드(서버 없음)에서는 처음부터 저장된 시연 데이터만 쓴다
 const STANDALONE = import.meta.env.VITE_STANDALONE === '1';
