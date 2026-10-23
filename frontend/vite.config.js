@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => {
     define: { 'import.meta.env.VITE_STANDALONE': JSON.stringify(preview ? '1' : '0') },
     plugins: [react(), viteSingleFile({ removeViteModuleLoader: true }), preview && reactFromCdn()].filter(Boolean),
     build: {
-      outDir: preview ? here + '../out/preview' : here + '../web',
+      outDir: preview ? here + '../out/preview' : here + '../dist',
       emptyOutDir: false,
       target: 'es2020',
       assetsInlineLimit: 100_000_000,
