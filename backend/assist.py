@@ -1,0 +1,849 @@
+"""
+세이빙 AI 대화 입구 — POST /api/assist  (+ /api/mediate · /api/resolve · /api/analyze)
+참고 구현 · 프론트 작업본용 (2026-10-21). 형식은 요구서 3장 그대로.
+
+  의도 판단 : saving_ai/ (자체 C++ 경량 모델 + 규칙). 외부 AI 를 부르지 않는다.
+  숫자     : 여기서 계산한다 (요구서 3-1 · 3-3 공식, main.baseline_of · post_allocation 과 같은 값)
+  문장     : 템플릿. 짧게 · 공감 먼저 · 다음에 할 일.
+
+  사용자가 말하지 않은 값은 묻기 전에 먼저 채운다.
+    ① 이번 말 → ② 직전 대화(context.last) → ③ 지금 화면 값(context) → ④ 이 건물 데이터(가장 크게 튄 달 등)
+  채웠으면 무엇을 채웠는지 첫 문장으로 말하고, 바꾸기 쉬운 칩을 준다.
+  채울 곳이 정말 없을 때만, 한 번에 하나만 되묻는다(고르기만 하면 되는 칩과 함께).
+
+  main.py 에 두 줄:  from assist import router as assist_router  /  app.include_router(assist_router)
+"""
+import math
+import re
+import sys
+from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+import main as M
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE / "saving_ai"))
+from saving_ai import SavingAI  # noqa: E402
+import rules as R  # noqa: E402
+
+AI = SavingAI()
+router = APIRouter()
+
+TAG = {"mediate": "🤝 합의 도우미", "resolve": "🏢 건물 찾기", "analyze": "🔎 변동 분석", "trust": "🛡 신뢰 확인", "clarify": "",
+       "carbon": "🌱 온실가스", "measures": "🛠 개선 대책", "support": "📋 지원사업", "scope": "🏛 적용 대상", "rent": "🤝 합의 도우미", "settle": "🧾 정산 판단"}
+SIM_NOTE = "공사 전 시뮬레이션이에요. 실제로 아낀 금액이 아니에요"
+POST_NOTE = "공사 후 실측 사용량과 기저선의 차이로 계산한 연간 절감액이에요"
+
+
+def money_note(bld_id):
+    """이 건물의 금액이 공사 전 시뮬레이션인지, 공사 후 실측 기반인지 (가상 데이터면 그것도)"""
+    sb = M.baseline_of(bld_id).get("saving_basis") or {}
+    o = M.data_origin(bld_id)
+    n = [POST_NOTE if sb.get("actual_based") else SIM_NOTE]
+    if o["is_simulated"]:
+        n.append(f"{o['label']} — 실제 측정값이 아니에요")
+    return n
+
+
+# ───────────────────────── 말 다듬기 ─────────────────────────
+def won(v):
+    return f"{int(v):,}"
+
+
+def man(v):
+    """50000000 → '5,000만 원' · 120000000 → '1억 2,000만 원' (읽기용 표기, 반올림 없음)"""
+    v = int(v)
+    eok, rest = divmod(v, 100_000_000)
+    m, r = divmod(rest, 10_000)
+    s = []
+    if eok:
+        s.append(f"{eok:,}억")
+    if m:
+        s.append(f"{m:,}만")
+    if r or not s:
+        s.append(f"{r:,}")
+    return " ".join(s) + " 원"
+
+
+def man_about(v):
+    """문장용 · 만 원 단위로 반올림해 '약'을 붙인다 (숫자 칸은 원 단위 그대로)"""
+    return "약 " + man(round(int(v) / 10_000) * 10_000)
+
+
+def pct(r):
+    v = r * 100
+    return f"{v:.0f}%" if abs(v - round(v)) < 1e-9 else f"{v:.1f}%"
+
+
+_BATCHIM_DIGIT = set("013678")
+
+
+def josa(word, a, b):
+    """받침 보고 은/는 · 이/가 · 으로/로 (숫자로 끝나면 읽는 소리로)"""
+    w = str(word).rstrip()
+    c = w[-1:] if w else ""
+    if c.isdigit():
+        return w + (a if c in _BATCHIM_DIGIT else b)
+    if "가" <= c <= "힣":
+        jong = (ord(c) - 0xAC00) % 28
+        if a.startswith("으로"):
+            return w + (a if jong and jong != 8 else b)
+        return w + (a if jong else b)
+    return w + a
+
+
+def ymk(ym):
+    return f"{int(ym[:4])}년 {int(ym[4:])}월"
+
+
+def resp(intent, reply, data=None, chips=None, facts=None, notices=None, actions=None, state=None, source="template", **extra):
+    out = {
+        "intent": intent, "tag": TAG.get(intent, ""), "reply": reply, "data": data,
+        "facts": facts if facts is not None else (data or {}).get("facts", []) if isinstance(data, dict) else [],
+        "notices": notices if notices is not None else (data or {}).get("notices", []) if isinstance(data, dict) else [],
+        "actions": actions if actions is not None else (data or {}).get("actions", []) if isinstance(data, dict) else [],
+        "chips": chips or [], "source": source,
+    }
+    if state is not None:
+        out["state"] = state
+    out.update(extra)
+    return out
+
+
+# ───────────────────────── 건물 ─────────────────────────
+ALIAS = {1: ["서울", "강남", "근린생활시설", "근린", "761-26", "761", "시연", "○○동", "샘플"],
+         2: ["양평", "블룸비스타", "블룸", "호텔"]}
+
+
+def buildings():
+    return M.query("SELECT bld_id, addr, purpose, area, sigungu, bjdong, bun, ji FROM building ORDER BY bld_id")
+
+
+def cand(b):
+    return {
+        "bld_id": b["bld_id"], "addr": b["addr"], "purpose": b["purpose"], "area": b["area"],
+        "codes": {"sigungu": b["sigungu"], "bjdong": b["bjdong"], "bun": b["bun"], "ji": b["ji"]},
+        "data_origin": {k: v for k, v in M.data_origin(b["bld_id"]).items() if k in ("is_simulated", "label")},
+    }
+
+
+def bld_by_id(i):
+    return next((b for b in buildings() if b["bld_id"] == i), None)
+
+
+def short_name(b):
+    return "양평 블룸비스타 호텔" if b["bld_id"] == 2 else f"{b['addr']} {b['purpose'].replace('제1종', '')}"
+
+
+def bld_chips():
+    """등록된 건물을 바로 고를 수 있는 칩 — 사용자에게 다시 쓰게 하지 않는다"""
+    return [{"label": short_name(b), "message": "양평 블룸비스타 호텔" if b["bld_id"] == 2 else "강남구 ○○동 761-26"} for b in buildings()]
+
+
+ROAD = re.compile(r"([가-힣\d]+(?:로|길))\s*(\d+(?:번길)?)\s*(\d+(?:-\d+)?)?")
+LOT = re.compile(r"([가-힣]+(?:동|리|읍|면))\s*(\d+(?:-\d+)?)\s*(번지)?")
+ZIP = re.compile(r"(?<![\d-])(\d{5})(?![\d-])")
+RESIDENTIAL = re.compile(r"아파트|빌라|다세대|오피스텔|단독주택|주택")
+
+
+def resolve_q(q):
+    """요구서 3-2 · matched / unregistered / residential / not_found"""
+    t = str(q or "")
+    hits = [b for b in buildings() if any(w in t for w in ALIAS.get(b["bld_id"], []))]
+    if hits:
+        b = hits[0]
+        sim = M.data_origin(b["bld_id"])["is_simulated"]
+        msg = "찾았어요. " + ("다만 이 건물은 시연을 위해 만든 가상 데이터예요. " if sim else "") + "이 건물이 맞나요?"
+        return {"result": "matched", "candidates": [cand(b)], "message": msg, "facts": [], "notices": [], "actions": []}
+    if RESIDENTIAL.search(t):
+        return {"result": "residential", "candidates": [], "facts": [], "notices": [], "actions": [],
+                "message": "아파트·주택은 공공 에너지데이터 제공 대상이 아니라서 찾을 수 없어요. 상가나 사무실 건물이라면 주소를 알려 주세요."}
+    m = ROAD.search(t) or LOT.search(t)
+    if m:
+        where = m.group(0).strip()
+        return {"result": "unregistered", "candidates": [], "facts": [], "notices": [], "actions": [],
+                "message": f"{josa(where, '은', '는')} 아직 에너지 데이터가 없는 건물이에요. 공공데이터가 공개된 건물만 볼 수 있거든요."}
+    return {"result": "not_found", "candidates": [], "facts": [], "notices": [], "actions": [],
+            "message": "어떤 건물인지 잘 모르겠어요. 도로명 주소나 건물 이름으로 알려 주세요."}
+
+
+# ───────────────────────── 🤝 합의 (요구서 3-1) ─────────────────────────
+def ceil5(r):
+    return math.ceil(r * 20 - 1e-9) / 20
+
+
+def mediate_calc(bld_id, invest, years, owner_ratio=None):
+    base = M.baseline_of(bld_id)
+    A, L = base["annual_saving_won"], base["ci_low_won"]
+
+    def two(saving, ratio):
+        oa = saving * ratio
+        return ({"owner_annual_won": int(oa), "tenant_monthly_won": int(saving * (1 - ratio) / 12),
+                 "payback_years": round(invest / oa, 1), "recovery_rate": round(oa * years / invest, 3)},
+                oa * years / invest >= 1)
+
+    def card(key, label, r):
+        b, ob = two(A, r)
+        lo, ol = two(L, r)
+        return {"key": key, "label": label, "owner_ratio": r, "base": b, "low": lo,
+                "meets_target_base": ob, "meets_target_low": ol}
+
+    head = {"invest_won": invest, "target_years": years, "annual_saving_won": A, "annual_saving_low_won": L,
+            "facts": [{"label": "연간 절감액", "value": A, "unit": "원", "kind": "simulated", "goto": "alloc"},
+                      {"label": "90% 범위 하한", "value": L, "unit": "원", "kind": "simulated", "goto": "base"}],
+            "notices": money_note(bld_id), "status": "ESTIMATED"}
+
+    if owner_ratio is not None:                                   # 말한 비율을 평가
+        c = card("user", f"말씀하신 {pct(owner_ratio)}", owner_ratio)
+        return {**head, "feasible": True, "options": [c], "actions": [{"type": "set_alloc", "ratio": owner_ratio, "invest": invest, "years": years}]}
+
+    br = invest / (A * years)
+    if br > 0.95:                                                 # 몫을 다 줘도 기간 안에 안 됨
+        longer = math.ceil(invest / A)
+        alts = []
+        if longer <= 30:
+            alts.append({"type": "longer", "years": longer, "text": f"건물주가 절감액을 전부 가져가도 {longer}년이 걸려요"})
+        mx = int(A * 0.95 * years)
+        alts.append({"type": "smaller", "max_invest_won": mx,
+                     "text": f"{years}년 안에 받으려면 공사비를 {man_about(mx)} 이하로 줄여야 해요(건물주 몫 95% 기준)"})
+        return {**head, "feasible": False, "options": [], "alternatives": alts, "actions": []}
+    br = max(0.05, ceil5(br))
+    sr = min(0.95, max(br, ceil5(invest / (L * years))))
+    opts = [card("base", "기본 추정", br)]
+    if sr > br:
+        opts.append(card("safe", "안전하게", sr))
+    return {**head, "feasible": True, "options": opts, "actions": [{"type": "set_alloc", "ratio": br, "invest": invest, "years": years}]}
+
+
+def mediate_text(d, safe_first=False, say_invest=True):
+    """건물주 · 세입자 두 벌 (숫자는 d 그대로)"""
+    inv, yrs = d["invest_won"], d["target_years"]
+    if not d["feasible"]:
+        return (f"아쉽지만 공사비 {man(inv)}은 {yrs}년 안에 돌려받기 어려워요. 이렇게 바꿔 보면 어떨까요?",
+                "이 조건은 건물주가 기간 안에 돌려받을 수 없어서 나눌 몫을 정하기 어려워요. 기간이나 공사비를 바꿔 볼까요?")
+    o = d["options"]
+    b = o[0]
+    s = o[1] if len(o) > 1 else None
+    if b["key"] == "user":
+        if b["meets_target_base"]:
+            own = f"건물주 몫 {pct(b['owner_ratio'])}면 공사비 {man(inv)}을 {b['base']['payback_years']}년 만에 돌려받아요."
+            own += " 절감액이 예상보다 적어도 기간 안에 돼요." if b["meets_target_low"] else f" 다만 절감액이 예상보다 적으면 {b['low']['payback_years']}년이 걸려요."
+        else:
+            own = f"건물주 몫 {pct(b['owner_ratio'])}로는 {yrs}년 안에 다 돌려받기 어려워요({b['base']['payback_years']}년 걸려요)."
+        ten = f"건물주 몫이 {pct(b['owner_ratio'])}면 세입자는 매달 {won(b['base']['tenant_monthly_won'])}원을 아껴요."
+        return own, ten
+    if safe_first and s:
+        own = (f"안전하게 가려면 건물주 몫을 {pct(s['owner_ratio'])}로 하면 돼요. 절감액이 예상보다 적어도 "
+               f"{s['low']['payback_years']}년 만에 돌려받아요.")
+    else:
+        own = (f"건물주 몫을 {pct(b['owner_ratio'])}로 하면 " + (f"공사비 {man(inv)}을 " if say_invest else "")
+               + f"{b['base']['payback_years']}년 만에 돌려받아요.")
+        if not b["meets_target_low"] and s:
+            own += f" 다만 절감액이 예상보다 적으면 {b['low']['payback_years']}년이 걸려서, 그때도 {yrs}년 안에 받으려면 {pct(s['owner_ratio'])}가 필요해요."
+        elif b["meets_target_low"]:
+            own += " 절감액이 예상보다 적어도 기간 안에 돌려받아요."
+    ten = f"건물주 몫이 {pct(b['owner_ratio'])}면 세입자는 매달 {won(b['base']['tenant_monthly_won'])}원을"
+    if s:
+        ten += f", {pct(s['owner_ratio'])}면 매달 {won(s['base']['tenant_monthly_won'])}원을"
+    ten += " 아껴요."
+    if s:
+        ten += f" 절감액이 예상보다 적으면 각각 {won(b['low']['tenant_monthly_won'])}원, {won(s['low']['tenant_monthly_won'])}원이에요."
+    else:
+        ten += f" 절감액이 예상보다 적으면 {won(b['low']['tenant_monthly_won'])}원이에요."
+    return own, ten
+
+
+# ───────────────────────── 🔎 변동 분석 (요구서 3-3) ─────────────────────────
+SEASON = {"봄": [3, 4, 5], "여름": [6, 7, 8], "가을": [9, 10, 11], "겨울": [12, 1, 2]}
+
+
+def fuel_of(bld_id):
+    return {r["ym"]: (r["elec"], r["gas"]) for r in M.query("SELECT ym, elec, gas FROM usage_monthly WHERE bld_id=?", (bld_id,))}
+
+
+def analyze_calc(bld_id, ym):
+    base = M.baseline_of(bld_id)
+    mb = {r["ym"]: r for r in base["monthly_baseline"]}
+    last, first = max(mb), min(mb)
+    if ym not in mb:
+        if ym > last:
+            return {"available": False, "last_data_ym": last, "facts": [], "notices": [], "actions": [],
+                    "reply": f"그 달 사용량은 아직 공개되지 않았어요. 공공데이터는 약 4개월 늦게 나와서, 지금은 {ymk(last)}까지 볼 수 있어요."}
+        return {"available": False, "last_data_ym": last, "facts": [], "notices": [], "actions": [],
+                "reply": f"{ymk(ym)} 사용량은 원자료에 없어요. {ymk(first)}부터 {ymk(last)}까지 볼 수 있어요."}
+    y, m = int(ym[:4]), int(ym[4:])
+    ref, note = f"{y - 1}{m:02d}", None
+    if ref not in mb:
+        ref = f"{y - 2}{m:02d}"
+        note = f"{y - 1}년 {m}월은 원자료가 없어 {y - 2}년 {m}월과 비교했어요"
+        if ref not in mb:
+            return {"available": False, "last_data_ym": last, "facts": [], "notices": [], "actions": [],
+                    "reply": f"{ymk(ym)}과 비교할 지난해 자료가 없어서 변화를 나눠 볼 수 없어요."}
+    cur, prv = mb[ym], mb[ref]
+    change = int(round(cur["actual"] - prv["actual"]))
+    weather = int(round(cur["baseline"] - prv["baseline"]))
+    other = change - weather
+    fu = fuel_of(bld_id)
+    e0, g0 = fu.get(ref, (None, None))
+    e1, g1 = fu.get(ym, (None, None))
+    anomaly = {a["ym"] for a in base["anomalies"]}
+    findings = []
+    summer_gas = m in (6, 7, 8, 9) and g0 and g1 and g1 > g0 * 1.5
+    if summer_gas:
+        findings.append("OUT_OF_SEASON_GAS")
+    if abs(other) > abs(weather):
+        findings.append("NON_WEATHER")
+    if ym in anomaly:
+        findings.append("ANOMALY")
+    if summer_gas:
+        survey = ["급탕·주방 가스 설비 사용 변화", "영업시간 변화", "가스 설비 교체·추가"]
+    elif change >= 0:
+        survey = ["냉난방 설비 사용 변화", "영업시간 변화", "새로 들인 설비"]
+    else:
+        survey = ["휴업·공실 여부", "영업시간 단축", "설비 교체"]
+    more = change >= 0
+    rk = f"{int(ref[:4])}년 {m}월"
+    reply = f"{ymk(ym)}은 {rk}보다 {abs(change):,} kWh를 {'더' if more else '덜'} 썼어요. "
+    if weather and other and (weather > 0) != (other > 0):
+        reply += (f"날씨만 보면 {abs(weather):,} kWh {'늘' if weather > 0 else '줄'}었어야 하는데, "
+                  f"다른 이유로 {abs(other):,} kWh가 {'늘' if other > 0 else '줄'}었어요.")
+    elif abs(weather) >= abs(other):
+        reply += f"대부분 날씨 영향이에요({abs(weather):,} kWh)."
+    else:
+        reply += f"그중 날씨 때문인 건 {abs(weather):,} kWh뿐이고, {abs(other):,} kWh는 다른 이유예요."
+    if summer_gas:
+        reply += f" 난방이 없는 여름에 가스가 {int(g0):,} → {int(g1):,} kWh로 늘었으니, 영업시간이나 가스 설비가 바뀌었는지 현장에서 확인해 보면 좋아요."
+    elif abs(other) > abs(weather):
+        reply += " 현장에서 무엇이 바뀌었는지 확인해 보면 좋아요."
+    return {
+        "available": True, "ym": ym, "ref_ym": ref, "ref_note": note,
+        "actual_kwh": int(cur["actual"]), "ref_actual_kwh": int(prv["actual"]),
+        "change_kwh": change, "weather_kwh": weather, "other_kwh": other,
+        "by_fuel": {"elec": [int(e0), int(e1)], "gas": [int(g0), int(g1)]} if e0 is not None and e1 is not None else {},
+        "findings": findings, "reply": reply, "survey": survey,
+        "facts": [{"label": f"{ym[:4]}.{ym[4:]} 실측", "value": int(cur["actual"]), "unit": "kWh", "kind": "measured", "goto": "base"},
+                  {"label": "기온 영향", "value": weather, "unit": "kWh", "kind": "model", "goto": "base"},
+                  {"label": "기온 외 요인", "value": other, "unit": "kWh", "kind": "model", "goto": "base"}],
+        "notices": ["원인은 사용량만으로 확정할 수 없어요"], "actions": [],
+    }
+
+
+def pick_month(bld_id, u, ctx_last):
+    """분석할 달 고르기 → (ym, 채운 이유 문장 or None, 다른 후보 칩)"""
+    base = M.baseline_of(bld_id)
+    have = sorted(r["ym"] for r in base["monthly_baseline"])
+    last = have[-1]
+    s = u["slots"]
+    if s.get("ym"):
+        return s["ym"], None, []
+    if s.get("month_only"):
+        mo = s["month_only"]
+        ys = [ym for ym in have if int(ym[4:]) == mo]
+        if ys:
+            ym = ys[-1]
+            others = [f"{int(x[:4])}년 {mo}월 사용량 분석해줘" for x in ys[-4:-1]][::-1]
+            return ym, f"가장 최근 {ymk(ym)}", others
+    if s.get("season"):
+        yy, name = s["season"]
+        ms = [f"{yy + (1 if (name == '겨울' and mm in (1, 2)) else 0)}{mm:02d}" for mm in SEASON[name]]
+        ms = [x for x in ms if x in have]
+        if ms:
+            mb = {r["ym"]: r for r in base["monthly_baseline"]}
+            ym = max(ms, key=lambda x: abs(mb[x]["actual"] - mb[x]["baseline"]))
+            return ym, f"{yy}년 {name} 중 가장 많이 변한 {int(ym[4:])}월", [f"{ymk(x)} 사용량 분석해줘" for x in ms if x != ym]
+    if ctx_last and ctx_last.get("intent") == "analyze" and ctx_last.get("ym"):
+        return ctx_last["ym"], None, []
+    an = sorted(base["anomalies"], key=lambda a: -a["ratio"])
+    if an:
+        ym = an[0]["ym"]
+        others = []
+        for a in an[1:]:
+            k = f"{ymk(a['ym'])} 사용량 분석해줘"
+            if a["ym"] != ym and k not in others:
+                others.append(k)
+        return ym, f"가장 크게 튄 {ymk(ym)}", others[:3]
+    return last, f"가장 최근 {ymk(last)}", []
+
+
+# ───────────────────────── 🛡 신뢰 ─────────────────────────
+def trust_calc(bld_id, quarter, ratio):
+    base = M.baseline_of(bld_id)
+    mc = base["metric_checks"]
+    y, q = None, None
+    if quarter and re.fullmatch(r"\d{4}-[1-4]", str(quarter)):
+        y, q = map(int, str(quarter).split("-"))
+    else:
+        cs = M.get_demo(bld_id)["cases"]
+        if cs:
+            y, q = cs[0]["year"], cs[0]["quarter"]
+    code = None
+    if y:
+        try:
+            code = M.get_settlement(bld_id, y, q, min(0.95, max(0.05, ratio or 0.7)))["status_code"]
+        except HTTPException:
+            code = None
+    fail = not (mc["cv_rmse"]["ok"] and mc["r2"]["ok"])
+    if code in (None, "ESTIMATED"):
+        reply = "솔직히 말씀드리면 아직은 시뮬레이션이에요. 공사 전이라 실제로 아낀 양이 없어요."
+    elif code == "PROVISIONAL":
+        reply = "이 분기 금액은 잠정이에요. 근거가 조금 부족한 달이 있어서 연 단위로 다시 확인해요."
+    elif code == "REVIEW_REQUIRED":
+        reply = "이 분기는 아직 믿기 어려워요. 기온으로 설명되지 않는 변화가 있어서 금액을 확정하지 않았어요."
+    elif code == "INSUFFICIENT_DATA":
+        reply = "이 분기는 사용량이 아직 공개되지 않아서 판단할 수 없어요."
+    else:
+        reply = "공사 후 실측 사용량으로 검증한 금액이라 믿으셔도 돼요."
+    if fail and mc["cv_rmse"]["ok"]:
+        reply += (f" 예측 오차는 {mc['cv_rmse']['value']}%로 기준 안이지만, 설명력이 {mc['r2']['value']}로 기준(0.75)보다 조금 낮아서 "
+                  "금액을 확정하지 않고 범위로 보여드리고 있어요.")
+    elif fail:
+        reply += " 예측 정확도도 기준보다 조금 낮아서 금액을 확정하지 않고 범위로 보여드리고 있어요."
+    else:
+        reply += " 예측 모델은 기준을 통과했어요."
+    data = {"status_code": code, "metric_checks": mc, "is_simulated": M.data_origin(bld_id)["is_simulated"]}
+    facts = [{"label": "예측 오차", "value": mc["cv_rmse"]["value"], "unit": "%", "kind": "model", "goto": "base"},
+             {"label": "설명력", "value": mc["r2"]["value"], "unit": "", "kind": "model", "goto": "base"}]
+    return data, reply, facts
+
+
+# ───────────────────────── 대화 입구 ─────────────────────────
+class AssistReq(BaseModel):
+    message: str
+    context: dict = {}
+
+
+YES = re.compile(r"^(네|응|ㅇㅇ|맞아|맞아요|그래|좋아|ㅇㅋ|오케이|예)\b")
+DONT_KNOW = re.compile(r"모르|몰라|기억\s*안|생각\s*안")
+GREET = re.compile(r"^(안녕|하이|hi|hello|ㅎㅇ|반가)", re.I)
+THANKS = re.compile(r"고마|감사|땡큐|ㄱㅅ")
+SAFE = re.compile(r"안전|보수|최악|낮게\s*나|적게\s*나|덜\s*위험")
+CH = {
+    "deal": {"label": "공사비 5천만, 8년", "message": "공사비 5천만, 8년 안에 회수하고 싶어요"},
+    "gas": "가스가 왜 튀었어?",
+    "trust": "이 금액 믿어도 돼요?",
+    "tenant": "세입자 입장은?",
+    "owner": "건물주 입장은?",
+    "safe": "안전하게 하면?",
+    "years": {"label": "기간 바꿔 볼래요", "fill": "기간 "},
+    "money": {"label": "공사비 바꿔 볼래요", "fill": "공사비 "},
+    "byName": {"label": "건물 이름으로 찾을게요", "fill": "건물 이름: "},
+}
+
+
+# ───────────────── 모델이 모르는 주제 — 규칙이 먼저 잡는다 (2026-10-22 추가) ─────────────────
+# 의도 판단 모델(7가지)은 그대로 두고, 심사·현장에서 자주 나올 주제만 앞에서 잡아
+# 이미 있는 데이터(/api/measures · /api/eligibility · /api/allocation)로 답한다. 숫자는 지어내지 않는다.
+T_CARBON = re.compile(r"탄소|온실\s*가스|이산화\s*탄소|co2|배출량|탄소\s*중립", re.I)
+T_PUBLIC = re.compile(r"경로당|보건소|어린이집|공공\s*건축물|공공\s*건물|관공서|주민\s*센터|행정\s*복지|도서관|학교|공공\s*기관")
+T_SUPPORT = re.compile(r"지원\s*사업|지원금|보조금|이자\s*지원|brp|정부\s*지원|지원\s*받|지원\s*되|지원\s*대상", re.I)
+X_PROOF = re.compile(r"증빙|제출|서류|인정|심사|근거로")          # '이 숫자를 서류로 내도 돼?' 는 신뢰 질문
+X_SHOP = re.compile(r"어디서|어디\s*거|어디\s*가|업체|제품|가격|얼마예|싸게|싸요|사요|브랜드|중에|뭐가\s*나아|(보일러|창호|단열재|led|조명|히트\s*펌프)\s*.{0,3}추천", re.I)   # 물건·업체 추천은 범위 밖
+X_WHY = re.compile(r"탓|때문|날씨")                                # '단열 탓이야?' 는 변동 분석
+X_DEF = re.compile(r"뜻|포인트|제도")                              # '탄소중립이 무슨 뜻' 은 용어 질문
+X_VIEW = re.compile(r"입장|관점|쪽")                               # '월세 사는 사람 입장으로' 는 관점 바꾸기
+T_MEASURE = re.compile(r"(어떤|무슨|뭘|무엇|뭐)\s*.{0,6}(공사|대책|시공|리모델링|개선)|공사\s*.{0,4}(추천|종류|뭐)|개선\s*대책|"
+                       r"효과\s*.{0,4}(큰|좋은)\s*.{0,4}(공사|대책)|단열|창호|보일러|led|조명\s*교체", re.I)
+T_RENT = re.compile(r"월세|임대료|차임|보증금|렌트")
+T_BENEFIT = re.compile(r"좋|이득|이익|혜택|왜|뭐가|무슨\s*이점|장점|남")
+CH_X = {
+    "carbon": "탄소는 얼마나 줄어?",
+    "measure": "어떤 공사가 효과 커?",
+    "support": "받을 수 있는 지원사업 있어?",
+}
+DEF = {"invest_won": 50_000_000, "target_years": 10, "owner_ratio": 0.7}   # 분배 화면 첫 값과 같다
+
+
+def tons(kg):
+    return f"{kg / 1000:.1f}"
+
+
+def alloc_of(bld_id, ctx):
+    inv = int(ctx.get("invest_won") or DEF["invest_won"])
+    yrs = int(ctx.get("target_years") or DEF["target_years"])
+    r = float(ctx.get("owner_ratio") or DEF["owner_ratio"])
+    r = min(0.95, max(0.05, r))
+    return M.post_allocation(M.AllocationRequest(bld_id=bld_id, invest_won=inv, owner_ratio=r, period_years=min(30, max(1, yrs)))), inv, r
+
+
+def view_benefit(v, bld_id, ctx):
+    """'세입자인데 뭐가 좋아?' — 관점만 바꾸지 않고 그 사람에게 남는 것을 숫자로 말한다"""
+    a, inv, r = alloc_of(bld_id, ctx)
+    if v == "tenant":
+        return (f"세입자는 공사비를 내지 않아요. 공사 후 아낀 요금의 {round((1 - r) * 100)}%를 가져가서, "
+                f"지금 조건이면 매달 약 {won(a['tenant_monthly_won'])}원을 덜 내요. 월세를 올리는 대신 아낀 만큼만 나누는 방식이에요.")
+    return (f"건물주는 아낀 요금의 {round(r * 100)}%로 공사비 {man(inv)}을 약 {a['payback_years']}년 만에 돌려받아요. "
+            "세입자도 요금이 줄어드니 공사에 동의할 이유가 생겨요.")
+
+
+# ── 🧾 정산 판단 — '이번 분기 정산해도 돼?' ──
+# 확정·보류는 /api/settlement 가 정한다. 여기서는 그 결과를 읽어 왜 그런지, 다음에 뭘 할지 말한다.
+T_SETTLE = re.compile(r"정산|확정\s*(해|돼|되|할|하)|보류|나눠\s*(줘도|도)\s*(돼|되)|지급\s*(해|돼|되)")
+QTR_FULL = re.compile(r"(20\d{2}|\d{2})\s*년?\s*([1-4])\s*분기")
+QTR_ONLY = re.compile(r"([1-4])\s*분기")
+
+
+def pick_quarter(t, ctx, bld_id=1):
+    """말 → 화면에서 보던 분기 → 시연 첫 분기 순서. (연, 분기, 채운 이유)"""
+    m = QTR_FULL.search(t)
+    if m:
+        y = int(m.group(1))
+        return (2000 + y if y < 100 else y), int(m.group(2)), None
+    cur = str(ctx.get("quarter") or "")
+    cy = int(cur[:4]) if re.fullmatch(r"\d{4}-[1-4]", cur) else None
+    m = QTR_ONLY.search(t)
+    cases = M.get_demo(bld_id)["cases"]
+    if m:
+        y = cy or (cases[0]["year"] if cases else 2026)
+        return y, int(m.group(1)), f"{y}년"
+    if cy:
+        return cy, int(cur[-1]), None
+    c = cases[0] if cases else {"year": 2026, "quarter": 1}
+    return c["year"], c["quarter"], f"{c['year']} {c['quarter']}분기"
+
+
+def mon(ym):
+    return f"{int(ym[4:])}월"
+
+
+def settle_answer(bld_id, t, ctx, src, assumed, sim_note):
+    y, q, why = pick_quarter(t, ctx, bld_id)
+    r = float(ctx.get("owner_ratio") or DEF["owner_ratio"])
+    d = M.get_settlement(bld_id, y, q, min(0.95, max(0.05, r)))
+    code = d["status_code"]
+    ms = d.get("months", [])
+    bad = [m for m in ms if m.get("state") == "확인 중"]
+    ok = [m for m in ms if m.get("state") == "정산"]
+    none = [m for m in ms if m.get("state") == "데이터 없음"]
+    name = f"{y}년 {q}분기"
+    post = bool(d.get("actual_based"))
+    if post:
+        pre_work = ("공사 후 실측 사용량과 기저선의 차이로 계산한 금액이에요. 다만 기저선 모델이 확정 기준을 다 채우지 못해서 잠정이고, 연 단위로 다시 확인해요."
+                    if code == "PROVISIONAL" else "공사 후 실측으로 검증한 금액이에요.")
+        if data_sim := M.data_origin(bld_id)["is_simulated"]:
+            pre_work += " (이 건물은 가상 공사 시연 데이터예요.)"
+    else:
+        pre_work = "공사 전이라 실제 정산이 아니라 시뮬레이션이고, 공사 후 실측이 들어와야 확정돼요."
+    split = (f"합의한 비율로 나누면 건물주 {won(d['owner_won'])}원, 세입자 {won(d['tenant_won'])}원이에요."
+             if d.get("saving_won") else "")
+
+    def why_bad(xs):
+        """'7월은 가스가 평소의 1.94배, 8월은 2.41배로 늘었는데'"""
+        parts, last_fuel = [], None
+        for m in xs:
+            g = re.search(r"(\S+) 사용량이 과거 같은 달 평균의 ([\d.]+)배", m.get("note") or "")
+            if not g:
+                parts.append(josa(mon(m["ym"]), "은", "는"))
+                continue
+            fuel, x = g.group(1), g.group(2)
+            head = josa(mon(m["ym"]), "은", "는")
+            parts.append(f"{head} {josa(fuel, '이', '가')} 평소의 {x}배" if fuel != last_fuel else f"{head} {x}배")
+            last_fuel = fuel
+        return ", ".join(parts) + "로 늘었는데"
+
+    if code == "INSUFFICIENT_DATA":
+        reply = (f"{name}는 아직 판단할 수 없어요. 공공데이터는 공개까지 약 4개월 걸려서 이 분기 사용량이 없어요. "
+                 "데이터가 들어오면 같은 규칙으로 바로 계산해요.")
+    elif code == "REVIEW_REQUIRED":
+        reply = (f"{name}는 정산하지 않는 게 맞아요. {why_bad(bad)}, 기온으로는 설명되지 않아요. "
+                 "이럴 때 금액을 확정하면 한쪽이 손해를 볼 수 있어서 보류해요. "
+                 "그 기간에 영업시간·인원·설비가 바뀌었는지 건물주와 세입자가 함께 확인하면, 기준을 다시 잡아 계산해요.")
+    elif bad:
+        reply = (f"{name}는 {', '.join(mon(m['ym']) for m in bad)}만 빼고 계산했어요. {why_bad(bad)}, 기온으로는 설명되지 않거든요. "
+                 f"나머지 {len(ok)}개월로 {won(d['saving_won'])}원이고, {split} "
+                 f"빠진 달은 양측이 원인을 확인하면 다시 계산해요. {pre_work}")
+    elif code in ("ESTIMATED", "PROVISIONAL") and d.get("saving_won"):
+        tail = pre_work if (code == "ESTIMATED" or post) else "근거가 조금 부족해서 잠정 금액이고, 연 단위로 다시 확인해요."
+        miss = f" {', '.join(mon(m['ym']) for m in none)}은 자료가 없어 뺐어요." if none else ""
+        reply = f"{name}는 이상 없이 계산됐어요. {won(d['saving_won'])}원이고, {split}{miss} {tail}"
+    elif code == "VERIFIED":
+        reply = f"{name}는 공사 후 실측으로 검증된 금액이라 정산해도 돼요. {won(d['saving_won'])}원이고, {split}"
+    else:
+        reply = f"{name}: {d.get('status_msg', '')}"
+
+    facts = [{"label": "정산한 달", "value": len(ok), "unit": f"/ {len(ms)}개월", "kind": "model", "goto": "setl"}]
+    if bad:
+        facts.append({"label": "보류한 달", "value": len(bad), "unit": "개월", "kind": "model", "goto": "setl"})
+    if d.get("saving_won"):
+        facts.append({"label": "분기 금액", "value": d["saving_won"], "unit": "원", "kind": "model" if post else "simulated", "goto": "setl"})
+    notices = [d.get("amount_note")] if d.get("amount_note") else []
+    others = [c for c in M.get_demo(bld_id)["cases"] if (c["year"], c["quarter"]) != (y, q)]
+    chips = [{"label": f"{c['period']}는?", "message": f"{c['year']}년 {c['quarter']}분기 정산해도 돼?"} for c in others[:2]] + [CH["trust"]]
+    extra = dict(assumed)
+    if why and not assumed:
+        extra["filled"] = f"{why} 기준으로 봤어요"
+    return resp("settle", reply.strip(), {"status_code": code, "period": name}, facts=facts, notices=notices + sim_note,
+                chips=chips, source=src, state={"intent": "settle", "quarter": f"{y}-{q}"}, **extra)
+
+
+def topic_answer(t, s, ctx, src):
+    """해당 주제가 아니면 None"""
+    settle_q = T_SETTLE.search(t) and not X_PROOF.search(t) and not s.get("invest_won") and not s.get("owner_ratio")
+    if not settle_q and (s.get("invest_won") or s.get("target_years") or s.get("owner_ratio")):
+        return None                                  # 숫자가 있으면 합의 계산이 먼저 ('23년 3분기'의 23년은 예외)
+    bld_id = ctx.get("bld_id") or 1
+    assumed = {} if ctx.get("bld_id") else {"filled": "시연 건물 기준으로 봤어요", "building": cand(bld_by_id(1))}
+    sim = M.data_origin(bld_id)["is_simulated"]
+    sim_note = [f"{M.data_origin(bld_id)['label']} — 실제 측정값이 아니에요"] if sim else []
+
+    # 🧾 정산해도 되는지
+    if settle_q:
+        return settle_answer(bld_id, t, ctx, src, assumed, sim_note)
+
+    # 🏛 공공건축물 — 이 서비스가 필요한 곳과 아닌 곳을 분명히 한다
+    if T_PUBLIC.search(t):
+        return resp("scope",
+                    "경로당·보건소 같은 공공건축물은 공사비를 내는 쪽과 요금을 아끼는 쪽이 같아서 나눌 문제가 없어요. "
+                    "그래서 공공건축물은 정부·지자체가 공사비를 지원하는 그린리모델링 사업이 맞아요. "
+                    "세이빙 셰어는 건물주와 세입자가 다른 민간 임대 건물을 위한 서비스예요.",
+                    chips=[CH["deal"], CH_X["support"]], source=src)
+
+    # 🌱 온실가스
+    if T_CARBON.search(t) and not X_DEF.search(t):
+        m = M.get_measures(bld_id)
+        lo, hi = m["total_co2_kg"]
+        sl, sh = m["total_saving_kwh"]
+        rl, rh = m["total_saving_rate"]
+        return resp("carbon",
+                    f"개선 대책 {len(m['measures'])}가지를 모두 적용하면 1년에 {won(sl)}~{won(sh)} kWh"
+                    f"(사용량의 {round(rl * 100)}~{round(rh * 100)}%)를 줄이고, "
+                    f"온실가스는 1년에 약 {tons(lo)}~{tons(hi)}톤 줄어드는 걸로 추정돼요. "
+                    "대책별 절감률은 시나리오 가정값이라 한 숫자가 아니라 범위로 보여드려요.",
+                    facts=[{"label": "온실가스 감축 (연)", "value": round(lo / 1000, 1), "unit": f"~ {hi / 1000:.1f} tCO₂eq", "kind": "simulated", "goto": "meas"}],
+                    notices=["대책별 절감률은 시나리오 가정값이에요", "배출계수: 전력 0.4173(2023년 국가 고유값) · 가스 0.2020(IPCC 2006) kgCO₂eq/kWh"] + sim_note,
+                    chips=[CH_X["measure"], CH["deal"]], source=src, **assumed)
+
+    # 📋 지원사업
+    if T_SUPPORT.search(t) and not X_PROOF.search(t):
+        e = M.get_eligibility(bld_id)
+        ok = [c for c in e["checks"] if c["ok"] and c["program"] not in ("세이빙 셰어", "데이터")]
+        if ok:
+            pname = {"이자지원": "그린리모델링 이자지원", "BRP (서울시)": "서울시 BRP"}
+            parts = [f"{pname.get(c['program'], c['program'])}({c['name']})" for c in ok]
+            names = ", ".join(parts)
+            reply = (f"건축물대장으로 보면 이 건물은 {names} 요건에 {'모두 ' if len(parts) > 1 else ''}맞아요. "
+                     "이자 지원으로 공사비 부담을 줄이고, 공사 후에는 세이빙 셰어로 아낀 요금을 나눠 공사비를 돌려받을 수 있어요. "
+                     "실제 지원 여부와 금액은 그해 사업 공고에서 확인해야 해요.")
+        else:
+            reply = "건축물대장으로 확인한 요건으로는 지금 맞는 지원사업이 없어요. 그래도 세이빙 셰어로 아낀 요금을 나눠 공사비를 돌려받는 계산은 할 수 있어요."
+        return resp("support", reply,
+                    facts=[{"label": "요건에 맞는 지원사업", "value": len(ok), "unit": "개", "kind": "ledger", "goto": "elig"}],
+                    notices=["건축물대장 기준 1차 확인이에요. 신청 전 사업 공고를 꼭 확인하세요"],
+                    chips=[CH["deal"], CH_X["measure"]], source=src, **assumed)
+
+    # 🛠 개선 대책
+    if T_MEASURE.search(t) and not X_SHOP.search(t) and not X_WHY.search(t):
+        m = M.get_measures(bld_id)
+        ms = sorted(m["measures"], key=lambda x: -x["saving_kwh_high"])
+        bf = m["by_fuel"]
+        gas_share = round(bf["gas"]["base_kwh"] / max(1, bf["gas"]["base_kwh"] + bf["elec"]["base_kwh"]) * 100)
+        order = ", ".join(f"{x['name'].split(' (')[0]}({'가스' if 'LNG' in x['fuel'] else '전기'} {round(x['rate_range'][0] * 100)}~{round(x['rate_range'][1] * 100)}%)" for x in ms)
+        return resp("measures",
+                    f"이 건물은 사용량의 {gas_share}%가 가스라서 난방 쪽 대책 효과가 커요. "
+                    f"줄일 수 있는 양이 큰 순서로 {order}예요. "
+                    "다만 지금 단열·창호 상태는 사용량 데이터만으로 알 수 없어서, 공사 전에 현장 확인이 먼저예요.",
+                    facts=[{"label": "모두 적용 시 절감", "value": round(m["total_saving_rate"][0] * 100), "unit": f"~ {round(m['total_saving_rate'][1] * 100)}%", "kind": "simulated", "goto": "meas"}],
+                    notices=["대책별 절감률은 시나리오 가정값이에요"] + sim_note,
+                    chips=[CH_X["carbon"], CH["deal"]], source=src, **assumed)
+
+    # 🤝 월세
+    if T_RENT.search(t) and not X_VIEW.search(t):
+        a, inv, r = alloc_of(bld_id, ctx)
+        return resp("rent",
+                    "월세를 얼마나 올려도 되는지는 제가 정할 수 없어요. 세이빙 셰어는 월세를 올리는 대신, 공사로 실제 아낀 요금을 나눠서 공사비를 돌려받는 방식이에요. "
+                    f"지금 조건이면 건물주는 약 {a['payback_years']}년에 공사비를 돌려받고, 세입자는 매달 약 {won(a['tenant_monthly_won'])}원을 덜 내요.",
+                    facts=[{"label": "건물주 회수 기간", "value": a["payback_years"], "unit": "년", "kind": "simulated", "goto": "alloc"},
+                           {"label": "세입자 매달 절감", "value": a["tenant_monthly_won"], "unit": "원", "kind": "simulated", "goto": "alloc"}],
+                    notices=money_note(bld_id),
+                    chips=[CH["tenant"], CH["deal"]], source=src, **assumed)
+    return None
+
+
+@router.post("/api/assist")
+def post_assist(req: AssistReq):
+    ctx = req.context or {}
+    last = ctx.get("last") or {}
+    u = AI.understand(req.message)
+    t = u["masked_text"].strip()
+    s = u["slots"]
+    intent = u["intent"]
+    src = "local_llm" if u["by"] == "nano" else "template"
+
+    # 직전에 하나를 물었다면 그 답으로 이어 받는다
+    if last.get("need") == "confirm_money" and (YES.search(t) or s.get("invest_won")):
+        s = {**s, "invest_won": s.get("invest_won") if s.get("invest_won") and s["invest_won"] >= 1_000_000 else last.get("cand_won")}
+        intent = "MEDIATE"
+    # 날짜만 말하면 사용량 이야기로 본다 ('8월', '작년 여름')
+    if intent in ("OUT", "ASK") and (s.get("ym") or s.get("month_only") or s.get("season")):
+        intent = "ANALYZE"
+    # 숫자만 던지면 합의 이어가기 ('10년이면?', '1억')
+    if intent in ("OUT", "ASK") and (s.get("invest_won") or s.get("target_years") or s.get("owner_ratio")):
+        intent = "MEDIATE"
+
+    # 모델이 모르는 주제(온실가스 · 개선 대책 · 지원사업 · 공공건축물 · 월세)는 규칙이 먼저 답한다
+    if last.get("need") not in ("confirm_money", "invest", "years"):
+        ta = topic_answer(t, s, ctx, "template")
+        if ta:
+            return ta
+
+    # 건물: 이번 말에 없으면 화면에 열린 건물 → 없으면 시연 건물(그렇다고 말한다)
+    bld_id = ctx.get("bld_id")
+    assumed_bld = None
+    if not bld_id and intent in ("MEDIATE", "ANALYZE", "TRUST"):
+        bld_id, assumed_bld = 1, bld_by_id(1)
+    said = bool(last.get("assumed_said"))
+    pre = ""                                     # 채운 것은 문장이 아니라 filled 한 줄로 알린다
+    fill_bld = ["시연 건물"] if assumed_bld else []
+    extra = {"building": cand(assumed_bld)} if assumed_bld else {}
+
+    # ── 인사 · 고마움 ──
+    if intent in ("OUT", "ASK") and GREET.search(t):
+        return resp("clarify", "안녕하세요, 세이빙 AI예요. 공사비를 몇 년 안에 돌려받을 수 있는지, 사용량이 왜 바뀌었는지 같은 걸 편하게 물어보세요.",
+                    chips=[CH["deal"], CH["gas"], CH["trust"]], source=src)
+    if intent in ("OUT", "ASK") and THANKS.search(t):
+        return resp("clarify", "도움이 됐다니 다행이에요. 더 궁금한 게 생기면 언제든 물어보세요.", chips=[CH["trust"], CH["gas"]], source=src)
+
+    # ── 🏢 건물 찾기 ──
+    if intent == "RESOLVE":
+        if DONT_KNOW.search(t):
+            if ctx.get("bld_id"):
+                b = bld_by_id(ctx["bld_id"])
+                d = {"result": "matched", "candidates": [cand(b)], "message": "", "facts": [], "notices": [], "actions": []}
+                return resp("resolve", f"지금 보고 있는 건물은 {b['addr']}예요. 이 건물 이야기인가요?", d, chips=[CH["byName"]], source=src)
+            d = {"result": "matched", "candidates": [cand(b) for b in buildings()], "message": "", "facts": [], "notices": [], "actions": []}
+            return resp("resolve", "괜찮아요. 지금 볼 수 있는 건물은 이 두 곳이에요. 이 중에 있나요? 없으면 건물 이름이나 동네를 알려 주세요.",
+                        d, chips=[CH["byName"]], source=src)
+        z = ZIP.search(t)
+        if z and not s:
+            return resp("resolve", f"{josa(z.group(1), '은', '는')} 우편번호 같아요. 우편번호로는 찾을 수 없어서, 지금 볼 수 있는 건물을 보여드릴게요. 이 중에 있나요?",
+                        {"result": "matched", "candidates": [cand(b) for b in buildings()], "message": "", "facts": [], "notices": [], "actions": []},
+                        chips=[CH["byName"]], source=src)
+        d = resolve_q(t)
+        chips = [CH["gas"], CH["deal"]] if d["result"] == "matched" else bld_chips() + [{"label": "다른 주소로 찾을게요", "fill": ""}]
+        if d["result"] in ("unregistered", "not_found", "residential"):
+            d = {**d, "message": d["message"] + " 지금 볼 수 있는 건물은 아래에 있어요."}
+        return resp("resolve", d["message"], d, chips=chips, source=src)
+
+    # ── 관점 ──
+    if intent in ("VIEW_OWNER", "VIEW_TENANT"):
+        v = "tenant" if intent == "VIEW_TENANT" else "owner"
+        msg = f"이제 {'세입자' if v == 'tenant' else '건물주'} 입장으로 설명할게요. 숫자는 그대로예요."
+        if T_BENEFIT.search(t):
+            msg = view_benefit(v, ctx.get("bld_id") or 1, ctx)
+        return resp("mediate", msg,
+                    actions=[{"type": "set_viewer", "viewer": v}], chips=[CH["owner" if v == "tenant" else "tenant"], CH["safe"]], source=src)
+
+    # ── 🤝 합의 ──
+    if intent == "MEDIATE":
+        if any(k == "money_unit" for k, _ in u["ambiguous"]) and last.get("need") != "confirm_money":
+            v = dict(u["ambiguous"])["money_unit"]
+            return resp("clarify", f"{v // 1000}천만 원 말씀이신가요?", source=src,
+                        chips=[{"label": f"네, {v // 1000}천만 원이에요", "message": f"네 {v // 1000}천만 원"}, {"label": "아니에요", "fill": "공사비 "}],
+                        state={"intent": "mediate", "need": "confirm_money", "cand_won": v * 10_000,
+                               "target_years": last.get("target_years") if last.get("intent") == "mediate" else None})
+        filled = []
+        inv = s.get("invest_won") or (last.get("invest_won") if last.get("intent") == "mediate" else None)
+        if not inv:
+            inv = ctx.get("invest_won")
+            if inv:
+                filled.append(f"공사비 {man(inv)}")
+        yrs = s.get("target_years") or (last.get("target_years") if last.get("intent") == "mediate" else None)
+        if not yrs:
+            yrs = ctx.get("target_years")
+            if yrs:
+                filled.append(f"{yrs}년")
+        if not inv:
+            return resp("clarify", "공사비가 얼마예요?", source=src, chips=[CH["deal"], {"label": "1억", "message": "공사비 1억"}, {"label": "직접 쓸게요", "fill": "공사비 "}],
+                        state={"intent": "mediate", "need": "invest", "target_years": yrs})
+        if not yrs:
+            return resp("clarify", "몇 년 안에 돌려받고 싶으세요?", source=src,
+                        chips=[{"label": f"{n}년", "message": f"{n}년"} for n in (5, 8, 10, 15)],
+                        state={"intent": "mediate", "need": "years", "invest_won": inv})
+        if not 1 <= yrs <= 30:
+            return resp("clarify", "기간은 1년에서 30년 사이로 정할 수 있어요. 몇 년으로 볼까요?", source=src,
+                        chips=[{"label": f"{n}년", "message": f"{n}년"} for n in (5, 10, 15, 20)], state={"intent": "mediate", "invest_won": inv})
+        r = s.get("owner_ratio")
+        if r is not None and not 0.05 <= r <= 0.95:
+            return resp("clarify", "건물주 몫은 5%에서 95% 사이로 정할 수 있어요.", source=src, chips=[CH["deal"]])
+        d = mediate_calc(bld_id, inv, yrs, r)
+        own, ten = mediate_text(d, safe_first=bool(SAFE.search(t)) and r is None, say_invest=not filled)
+        if SAFE.search(t) and len(d.get("options", [])) > 1:
+            d["pick"] = "safe"
+        d["reply_owner"], d["reply_tenant"] = own, ten
+        fl = fill_bld + filled
+        if fl and not (said and not filled):
+            extra = {**extra, "filled": f"{' · '.join(fl)}으로 계산했어요"}
+        chips = [CH["tenant"], CH["years"], CH["money"]] if d["feasible"] else \
+            [{"label": f"기간 {a['years']}년으로", "message": f"{a['years']}년"} for a in d["alternatives"] if a["type"] == "longer"] + [CH["money"]]
+        return resp("mediate", d["reply_owner"], d, chips=chips, source=src,
+                    state={"intent": "mediate", "invest_won": inv, "target_years": yrs, "assumed_said": bool(assumed_bld) or said}, **extra)
+
+    # ── 🔎 변동 분석 ──
+    if intent == "ANALYZE":
+        ym, why, others = pick_month(bld_id, u, last)
+        d = analyze_calc(bld_id, ym)
+        reply = d["reply"]
+        fl = fill_bld + ([why] if why else [])
+        if fl and not (said and not why):
+            extra = {**extra, "filled": josa(" · ".join(fl), "으로", "로") + " 봤어요"}
+        chips = (others or [])[:2] + [CH["trust"]]
+        return resp("analyze", reply, d, chips=chips, source=src, state={"intent": "analyze", "ym": ym, "assumed_said": bool(assumed_bld) or said}, **extra)
+
+    # ── 🛡 신뢰 ──
+    if intent == "TRUST":
+        d, reply, facts = trust_calc(bld_id, ctx.get("quarter"), ctx.get("owner_ratio"))
+        if fill_bld and not said:
+            extra = {**extra, "filled": "시연 건물 기준으로 봤어요"}
+        return resp("trust", reply, d, facts=facts, notices=money_note(bld_id),
+                    chips=[CH["deal"], CH["gas"]], source=src, state={"intent": "trust", "assumed_said": bool(assumed_bld) or said}, **extra)
+
+    # ── 범위 밖 · 못 알아들음 ── 두 번째부터는 말을 바꾼다
+    miss = int(last.get("miss", 0)) + 1 if last.get("intent") == "clarify" else 1
+    if miss >= 2:
+        return resp("clarify", "제가 잘 못 알아듣고 있네요. 이렇게 물어보시면 바로 답할 수 있어요.", source=src,
+                    chips=[CH["deal"], CH["gas"], bld_chips()[0]], state={"intent": "clarify", "miss": 0})
+    return resp("clarify", "그건 제가 잘 모르는 내용이에요. 공사비 회수 계산, 건물 찾기, 사용량이 바뀐 이유, 금액을 믿어도 되는지는 바로 알려드릴 수 있어요.",
+                source=src, chips=[CH["deal"], CH["gas"], CH["trust"]], state={"intent": "clarify", "miss": miss})
+
+
+# ───────────────────────── 요구서 3-1 · 3-2 · 3-3 ─────────────────────────
+class MediateReq(BaseModel):
+    bld_id: int = 1
+    invest_won: int
+    target_years: int
+    owner_ratio: Optional[float] = None
+    viewer: str = "owner"
+
+
+@router.post("/api/mediate")
+def post_mediate(req: MediateReq):
+    if req.invest_won <= 0 or not 1 <= req.target_years <= 30:
+        raise HTTPException(400, "공사비는 0보다 크고 기간은 1~30년이어야 합니다")
+    if req.owner_ratio is not None and not 0.05 <= req.owner_ratio <= 0.95:
+        raise HTTPException(400, "건물주 몫은 5~95% 사이여야 합니다")
+    d = mediate_calc(req.bld_id, req.invest_won, req.target_years, req.owner_ratio)
+    d["reply_owner"], d["reply_tenant"] = mediate_text(d)
+    return d
+
+
+class ResolveReq(BaseModel):
+    q: str
+
+
+@router.post("/api/resolve")
+def post_resolve(req: ResolveReq):
+    return resolve_q(R.mask_pii(req.q)[0])          # 주소는 로그에 남기지 않는다
+
+
+class AnalyzeReq(BaseModel):
+    bld_id: int = 1
+    ym: str
+
+
+@router.post("/api/analyze")
+def post_analyze(req: AnalyzeReq):
+    if not re.fullmatch(r"\d{6}", req.ym):
+        raise HTTPException(400, "ym 은 YYYYMM 형식이어야 합니다")
+    return analyze_calc(req.bld_id, req.ym)

@@ -1,0 +1,97 @@
+MEDIATE	리모델링 비용 4500만원인데 몇년이면 회수되나요
+MEDIATE	2억 투자하면 건물주가 얼마나 가져가야 해요
+MEDIATE	우리 건물 공사비 6천 들었는데 세입자랑 나눌 비율 좀
+MEDIATE	십년 안에 회수하려면 몇 대 몇이에요
+MEDIATE	건물주 85프로면 언제 본전임
+MEDIATE	세입자 몫 20%로 하면 어때요
+MEDIATE	회수 기간 줄이고 싶어요
+MEDIATE	좀 더 안전한 쪽으로 다시 계산해 주실래요
+MEDIATE	절감액이 기대보다 적으면 어떡해요
+MEDIATE	공사비 1억5천 12년
+MEDIATE	예산 3천만원 정도인데 분배 어떻게 하죠
+MEDIATE	임대인 임차인 6:4 괜찮을까요
+MEDIATE	투자비 회수 시뮬레이션 돌려줘
+MEDIATE	반반이면 손해 아님?
+MEDIATE	기간 5년으로 줄이면 몇 퍼센트 필요해
+MEDIATE	오천만원 칠년
+MEDIATE	건물주가 다 가져가도 회수 안 돼요?
+MEDIATE	합의 조건 추천해줘
+MEDIATE	공평하게 나누는 방법 알려주세요
+MEDIATE	공사비 2억 들면 세입자는 한달에 얼마 아껴요
+RESOLVE	서울시 송파구 잠실동 40-1
+RESOLVE	우리 건물은 종로구에 있어요
+RESOLVE	제 상가 주소 알려드릴게요 마포구 연남동 239-5
+RESOLVE	강남구 역삼동 빌딩 찾아요
+RESOLVE	양평 호텔 데이터 보여줘
+RESOLVE	건물 다시 선택할래
+RESOLVE	주소로 건물 찾기
+RESOLVE	영등포구 여의도동 오피스 빌딩
+RESOLVE	다른 건물도 볼 수 있어요?
+RESOLVE	블룸비스타 호텔 열어
+RESOLVE	경기 성남시 분당구 정자동 178-4 우리 사옥
+RESOLVE	아파트도 돼요?
+RESOLVE	761-26 번지 건물
+RESOLVE	을지로 100 건물 조회해 주세요
+RESOLVE	우리 빌딩 등록
+ANALYZE	2024년 1월 가스 왜 많아요
+ANALYZE	22년 여름 전기 사용량 이유
+ANALYZE	올해 2월 갑자기 늘었네 왜지
+ANALYZE	가스 사용량이 여름에 많은 이유가 뭐죠
+ANALYZE	작년 7월 사용량 원인 분석 부탁해요
+ANALYZE	25년 11월 전기 왜 이렇게 적어
+ANALYZE	기온 영향인지 확인해줘
+ANALYZE	2023년 8월 전년 대비 왜 늘었나요
+ANALYZE	4월에 가스가 두배로 뛴 이유
+ANALYZE	에너지 사용 급증 원인
+ANALYZE	2021년 12월 난방비 많이 나온 이유
+ANALYZE	이번에 사용량 튄 거 설비 때문이에요?
+ANALYZE	23년도 8월 분석
+ANALYZE	작년 겨울 가스 사용 왜 줄었어
+ANALYZE	요번달 전력 왜 많이 씀
+TRUST	이거 믿을 수 있는 숫자예요?
+TRUST	예측값이 정확한가요
+TRUST	절감액 진짜예요?
+TRUST	보장되나요
+TRUST	확정된 금액인가요
+TRUST	오차 범위가 어떻게 되나요
+TRUST	신뢰도 알려줘
+TRUST	이 결과 근거가 뭔가요
+TRUST	데이터 어디서 가져왔어요
+TRUST	과장된 거 아니에요?
+TRUST	정말 이만큼 줄어드나요
+TRUST	은행 대출 심사에 제출해도 돼요?
+TRUST	이 시뮬레이션 얼마나 맞아요
+TRUST	천만원 절감 믿어도 되나
+TRUST	예측 틀리면 어떡해요
+VIEW_TENANT	세입자 시점으로 보여줘
+VIEW_TENANT	임차인 쪽 설명
+VIEW_TENANT	저는 입주한 가게 사장인데요
+VIEW_TENANT	세입자 입장에서는요
+VIEW_TENANT	세입자한테 이득이에요?
+VIEW_TENANT	임차인 관점으로 바꿔
+VIEW_OWNER	건물주 시점으로
+VIEW_OWNER	임대인 쪽에서 설명해줘
+VIEW_OWNER	제가 건물 주인이에요
+VIEW_OWNER	집주인 입장에서 보면
+VIEW_OWNER	건물주한테 뭐가 남아요
+VIEW_OWNER	건물주 버전으로 다시
+OUT	하이
+OUT	감사해요
+OUT	잘 부탁해
+OUT	창호 교체 업체 알려줘
+OUT	보일러 가격 얼마예요
+OUT	너 이름 뭐야
+OUT	오늘 몇 일이야
+OUT	구독 취소
+OUT	노래 추천
+OUT	ㅎㅎㅎ
+OUT	음
+OUT	뭐라는 거야
+OUT	태양광 설치하면 얼마 들어요
+OUT	정부 지원금 받을 수 있어요?
+OUT	1억짜리 집 살까
+OUT	다음 주 날씨
+OUT	로그인 안돼요
+OUT	개인정보 처리방침
+OUT	챗봇 별로네
+OUT	ok
