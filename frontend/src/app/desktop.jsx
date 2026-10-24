@@ -44,7 +44,7 @@ function phasesOf(rows) {
 }
 
 /* ── 위 메뉴 ── */
-function Nav({ page, goPage, onSearch }) {
+function Nav({ page, goPage, onSearch, onNotice }) {
   return (
     <nav className="d-nav" aria-label="주 메뉴">
       <button type="button" className="brand" onClick={() => goPage('home')} aria-label="세이빙 셰어 홈">
@@ -55,6 +55,10 @@ function Nav({ page, goPage, onSearch }) {
           <button key={n.id} type="button" aria-current={page === n.id ? 'page' : undefined} onClick={() => goPage(n.id)}>{n.name}</button>
         ))}
       </div>
+      {/* 유의 안내 · 따로 한 줄을 차지하지 않고 메뉴 줄에 작게 (누르면 계산 방식) */}
+      <button type="button" className="d-note" onClick={onNotice} title="공사 전 금액 유의 안내 · 계산 방식 보기">
+        <Icon name="megaphone" size={16} />공사 전 금액 유의
+      </button>
       <button type="button" className="d-search" onClick={onSearch}>
         <Icon name="search" size={20} />
         <span><kbd>/</kbd> 를 눌러 건물을 찾으세요</span>
@@ -63,24 +67,13 @@ function Nav({ page, goPage, onSearch }) {
   );
 }
 
-/* ── 유의 안내 띠 · 가장 오해하기 쉬운 것 하나만 ── */
-function Notice({ onOpen, onClose }) {
-  return (
-    <div className="notice" role="note">
-      <span className="notice-ic"><Icon name="megaphone" size={20} /></span>
-      <b className="notice-t">공사 전 금액 유의 안내</b>
-      <button type="button" className="notice-btn" onClick={onOpen}>계산 방식 보기</button>
-      <button type="button" className="notice-x" aria-label="안내 닫기" onClick={onClose}><Icon name="close" size={18} /></button>
-    </div>
-  );
-}
-
 /* ── 판 맨 위 상태 줄 ── */
-function PanelStatus({ S, onAbout }) {
+function PanelStatus({ S, onAbout, lead }) {
   const c = connInfo(S.conn);
   const span = dataSpan(S.baseline.data?.monthly_baseline);
   return (
     <div className="p-status">
+      {lead}
       {span && <span className="dot green"><i /><b>공공데이터</b> {ymTxt(span.last)}까지 반영</span>}
       <span className={cx('dot', c.tone)} role="status">
         <i />
@@ -304,6 +297,7 @@ function Category({ S, route, go, goPage, onSearch }) {
   const prev = STEPS[k - 1];
   return (
     <>
+      <div className="p-headrow">
       <div className="p-prog" aria-label={`전체 ${STEPS.length}단계 중 ${k + 1}단계`}>
         <span className="num"><b>{k + 1}</b> / {STEPS.length}단계</span>
         <div className="p-prog-bar">
@@ -317,6 +311,7 @@ function Category({ S, route, go, goPage, onSearch }) {
         {g.steps.map(s => (
           <button key={s} type="button" role="tab" aria-selected={s === id} onClick={() => go(s)}>{stepById(s).name}</button>
         ))}
+      </div>
       </div>
       <div key={id} className="p-view soft-in"><StepView id={id} S={S} /></div>
       <div className="p-next">
@@ -686,7 +681,6 @@ export function DesktopApp({ S }) {
   const showReport = (key, ym) => { S.setQuarterKey(key); setMonth(ym); setHtab('setl'); setFocus({ ym, n: Date.now() }); };
   const [aiReq, setAiReq] = useState(0);
   const askAi = () => setAiReq(n => n + 1);
-  const [notice, setNotice] = useLocal('ss.notice.v1', true);
   const [sideW, setSideW] = useLocal('ss.side.w2', null);
 
   /* 왼쪽 화면이 바뀌는 모든 이동(메뉴·탭·이전/다음·바로가기·AI 쪽 이동 버튼)은 지나온 자리를 쌓는다
@@ -738,19 +732,17 @@ export function DesktopApp({ S }) {
     <ShellProvider value={{ device: 'pc', month, setMonth, go: goStep, aiReq, focus }}>
       <div className={cx('pc d-shell', !side && !a?.open && 'closed')}>
         <div className="d-main">
-          <Nav page={route.page} goPage={goPage} onSearch={() => setSheet('search')} />
-          {notice && <div className="d-notice-row"><Notice onOpen={() => setSheet('basis')} onClose={() => setNotice(false)} /></div>}
+          <Nav page={route.page} goPage={goPage} onSearch={() => setSheet('search')} onNotice={() => setSheet('basis')} />
           <div className="d-page">
-            {back && (
-              <div className="d-back soft-in" role="navigation" aria-label="돌아가기">
-                <button type="button" className="d-back-go" onClick={goBack}><Icon name="left" size={18} />
-                  {sid(back.route) === sid(route) ? '보던 자리로 돌아가기' : `${routeName(back.route)} 화면으로 돌아가기`}
-                </button>
-                <button type="button" className="icon-btn" aria-label="돌아가기 닫기" onClick={() => setHist([])}><Icon name="close" size={16} /></button>
-              </div>
-            )}
             <section className="panel" aria-label={route.page === 'home' ? '홈' : undefined}>
-              <PanelStatus S={S} onAbout={() => goStep('sys')} />
+              <PanelStatus S={S} onAbout={() => goStep('sys')} lead={back && (
+                <div className="d-back soft-in" role="navigation" aria-label="돌아가기">
+                  <button type="button" className="d-back-go" onClick={goBack}><Icon name="left" size={18} />
+                    {sid(back.route) === sid(route) ? '보던 자리로 돌아가기' : `${routeName(back.route)} 화면으로 돌아가기`}
+                  </button>
+                  <button type="button" className="icon-btn" aria-label="돌아가기 닫기" onClick={() => setHist([])}><Icon name="close" size={16} /></button>
+                </div>
+              )} />
               {route.page === 'home'
                 ? <Home S={S} go={goStep} onSearch={() => setSheet('search')} tab={htab} setTab={setHtab} focus={focus} />
                 : <Category S={S} route={route} go={goStep} goPage={goPage} onSearch={() => setSheet('search')} />}

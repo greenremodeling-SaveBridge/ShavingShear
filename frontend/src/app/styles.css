@@ -1410,3 +1410,49 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 
 /* 대화 칸은 가로로 스크롤하지 않는다 (칩·추천 질문은 넘치면 다음 줄로) */
 .as-log { overflow-x: hidden; }
+
+/* ══ PC 왼쪽 · 페이지째 스크롤하지 않는다 ══
+   메뉴 · 단계 머리(진행+탭) · 이전/다음은 고정, 단계 내용 칸만 넘치면 안에서 스크롤 */
+.d-note { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; background: var(--amber-weak); color: var(--amber-text); font-size: 13px; font-weight: 700; white-space: nowrap; transition: filter 0.15s; }
+.d-note:hover { filter: brightness(0.96); }
+.d-nav .d-note { margin-left: auto; }
+.d-nav .d-note + .d-search { margin-left: 0; }
+.pc .d-nav { height: 64px; gap: 24px; }
+.pc .d-main { overflow: hidden; }
+.pc .d-page { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-bottom: 12px; }
+.pc .d-back { flex: 0 0 auto; width: 100%; }
+.pc .panel { flex: 1 1 auto; min-height: 0; width: 100%; display: flex; flex-direction: column; padding: 14px 28px 0; }
+.pc .p-status { flex: 0 0 auto; min-height: 36px; margin-bottom: 8px; }
+.pc .p-status .ai-intro { height: 34px; }
+.p-headrow { flex: 0 0 auto; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 28px; margin: 4px 0 16px; }
+.p-headrow .p-prog { order: 2; margin: 0 0 0 auto; flex: 0 1 300px; }
+.p-headrow .p-tabs { order: 1; margin: 0; }
+.pc .p-view { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; margin: 0 -10px; padding: 2px 10px 16px; }
+.pc .p-next { position: static; flex: 0 0 auto; margin: 0; padding: 12px 0 14px; }
+.pc .home { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; margin: 0 -10px; padding: 0 10px 20px; }
+/* 돌아가기는 판 맨 위 상태 줄 맨 앞에 (따로 한 줄을 차지하지 않게) */
+.p-status .d-back { flex: 0 0 auto; width: auto; margin: 0; }
+.p-status .d-back-go { height: 32px; font-size: 13px; }
+/* 단계 안내는 PC 에서 한 줄로 */
+.pc .sguide { align-items: center; gap: 10px; padding: 9px 14px; margin-bottom: 18px; border-radius: 12px; }
+.pc .sguide-ic svg { width: 18px; height: 18px; }
+.pc .sguide > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 10px; min-width: 0; }
+.pc .sguide-t { font-size: 15px; line-height: 22px; }
+.pc .sguide-s { font-size: 13px; line-height: 19px; }
+.pc .sguide-ic { width: 26px; height: 26px; }
+.pc .sguide-s { margin-top: 0; }
+/* PC 한 화면에 맞추기 · 연도 막대는 조금 낮게, 오른쪽 지표 카드는 한 줄(이름 ← → 값) */
+.pc .ybars { height: 180px; }
+.pc .step-side .metrics { gap: 8px; }
+.pc .step-side .metric { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; }
+.pc .step-side .metric-v { font-size: 18px; line-height: 26px; justify-content: flex-end; }
+/* PC 정산 · 표 줄을 낮추고, 금액 아래 묻기 링크는 오른쪽 AI 칸 추천 질문과 겹쳐 뺀다 */
+.pc .tbl th { height: 34px; }
+.pc .tbl td { height: 44px; padding: 4px 10px; }
+.pc .setl-head .step-eye { margin-bottom: 4px; }
+.pc .setl-head .ask-link { display: none; }
+.pc .amt { font-size: 36px; line-height: 44px; }
+.pc .step-lead { margin-bottom: 18px; }
+.pc .ybars { height: 172px; }
+.pc .tbl td { height: 40px; }
+.pc .p-next { padding: 10px 0 12px; }

@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { AssistCtx } from './context.js';
 import { asksMyBuilding, callAssist, getMe, maskPII } from '../../core/assist.js';
 import { BuddyBody, Icon, reduced } from '../ui.jsx';
+import { koMoney } from '../../core/format.js';
 
 let seq = 0;
 const nid = () => `m${++seq}`;
@@ -68,6 +69,12 @@ export function AssistProvider({ S, children }) {
     try {
       const res = await callAssist(masked, context());
       const min = reduced() ? 900 : (MIN[res?.intent] ?? MIN.start);
+      // 같은 조건으로 다시 물어 답이 그대로면, 바뀐 게 없는 이유를 한 줄로 알린다
+      const pv = last.current, dd = res?.data;
+      if (res?.intent === 'mediate' && dd && !res.filled && pv?.intent === 'mediate'
+        && pv.invest_won === dd.invest_won && pv.target_years === dd.target_years) {
+        res.filled = `이미 ${dd.target_years}년 · ${koMoney(dd.invest_won)} 기준으로 계산한 결과와 같아요`;
+      }
       patch({ res, min });
       // 서버가 준 대화 상태(무엇을 물었는지 · 어떤 조건이었는지)를 다음 질문에 그대로 돌려준다
       if (res?.state) last.current = res.state;
@@ -129,9 +136,9 @@ export function AssistProvider({ S, children }) {
     if (Number.isFinite(invest)) s.setInvest(invest);
     if (Number.isFinite(years)) s.setYears(years);
     if (ai) s.setAiDraft(true);
-    go(to, { opened });
+    go(to, { opened, explicit: true });   // 사용자가 누른 버튼이라 그 화면으로 옮긴다 (PC 는 돌아가기가 생김)
     showToast({
-      text: nav.current.stay && !opened ? (to === 'draft' ? '특약 초안에 반영했어요' : '분배 조건을 바꿨어요') : '조건을 바꿨어요',
+      text: to === 'draft' ? '특약 초안에 반영했어요' : '분배 조건을 바꿨어요',
       undo: () => {
         const c = SRef.current;
         c.setRatio(prev.ratio); c.setInvest(prev.invest); c.setYears(prev.years); c.setAiDraft(prev.aiDraft);
