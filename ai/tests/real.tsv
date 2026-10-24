@@ -1,0 +1,129 @@
+MEDIATE	공사비 5천만, 8년 안에 회수하고 싶어요
+MEDIATE	공사비 팔천만 반반 십오 년
+MEDIATE	공사비 3억, 10년
+MEDIATE	안전하게 하면?
+MEDIATE	5천만원 들여서 리모델링하면 건물주는 몇 프로 가져가야 하나요
+MEDIATE	1억 들었는데 10년 안에 뽑으려면?
+MEDIATE	건물주 60% 하면 몇 년 걸리나요
+MEDIATE	7대3이면 회수 언제 돼요
+MEDIATE	우리 공사비 2억 5천인데 세입자랑 어떻게 나누는게 좋을까요
+MEDIATE	투자금 6천만원 회수기간 12년으로 잡으면 비율 어떻게 돼?
+MEDIATE	기간 20년으로 늘리면?
+MEDIATE	공사비를 4천만으로 줄이면 어때
+MEDIATE	80%로 바꿔봐
+MEDIATE	절감액 낮게 나와도 손해 안보는 비율
+MEDIATE	세입자도 이득 보면서 건물주도 회수하는 방법
+MEDIATE	합의안 좀 짜주세요
+MEDIATE	오천에 팔년
+MEDIATE	1억2천 15년 6대4
+MEDIATE	임대인 몫 몇퍼가 적당함?
+MEDIATE	공사비 칠천만 원이고 십 년 안에 회수해야 돼요
+MEDIATE	비용 9천만 회수 7년
+MEDIATE	5천만원 8년 회수 가능?
+MEDIATE	건물주 75프로 세입자 25프로로 하면 몇 년?
+MEDIATE	더 보수적인 안은요?
+MEDIATE	최소 비율이 얼마야
+MEDIATE	공사 끝나고 몇 년이면 본전이에요
+MEDIATE	우리 상가 단열공사 3천만원 견적 나왔는데 회수 계획 세워줘
+MEDIATE	반반 나누면 몇 년 걸려
+MEDIATE	세입자 입장에서 공사비 5천만 8년이면 한 달에 얼마 아껴요?
+MEDIATE	그럼 9년이면?
+RESOLVE	강남구 ○○동 761-26 우리 건물
+RESOLVE	양평 블룸비스타 호텔
+RESOLVE	서울 강남구 역삼동 123-45 찾아주세요
+RESOLVE	경기도 양평군 강하면 강남로 316
+RESOLVE	우리 건물 주소로 찾고 싶어요
+RESOLVE	테헤란로 152 건물 있어요?
+RESOLVE	마포구 합정동 상가 건물 조회
+RESOLVE	다른 건물로 바꿀래요
+RESOLVE	시연 건물 열어줘
+RESOLVE	제 건물은 서초구 서초동 1303-22 입니다
+RESOLVE	래미안 아파트 102동도 돼요?
+RESOLVE	761-26
+RESOLVE	양평에 있는 호텔
+RESOLVE	강남 근린생활시설
+RESOLVE	주소 검색
+RESOLVE	부산 해운대구 우동 1400 호텔 찾아줘
+RESOLVE	우리집 빌라도 조회 가능?
+RESOLVE	블룸비스타
+ANALYZE	23년 8월 가스가 왜 튀었어?
+ANALYZE	2023년 8월에 가스 사용량 왜 이렇게 많아요
+ANALYZE	작년 여름에 전기 왜 많이 썼어
+ANALYZE	8월 가스 왜 늘었어
+ANALYZE	여름인데 가스가 왜 이렇게 많이 나와요
+ANALYZE	23년 4월부터 가스가 이상하게 많은데 이유가 뭐예요
+ANALYZE	이 달 왜 튀었어
+ANALYZE	기온 때문인가요 아니면 다른 이유가 있나요
+ANALYZE	2026년 7월 사용량 분석해줘
+ANALYZE	작년 12월 전기 요금 왜 갑자기 올랐지
+ANALYZE	21년 1월이랑 비교해서 왜 늘었어
+ANALYZE	가스 사용이 2배 된 이유
+ANALYZE	2023.08 이상치 원인
+ANALYZE	지난달 전기 사용량이 확 줄었는데 왜 그래요
+ANALYZE	날씨 탓이야 장사 탓이야
+ANALYZE	23년 8월 가스비 100만원 나왔는데 왜요
+ANALYZE	변동 원인 분석
+ANALYZE	2025년 1월 난방 왜 이렇게 많이 썼냐
+ANALYZE	이상 감지된 달 원인이 뭐에요
+ANALYZE	삼월에 전기 왜 튐?
+TRUST	이 금액 믿어도 돼요?
+TRUST	이거 진짜 이만큼 절약돼요?
+TRUST	연 천만원 절감 확실한가요
+TRUST	예측 모델 정확도 어느 정도예요
+TRUST	이 숫자 근거 있어요?
+TRUST	실제로 받을 수 있는 돈 맞아요?
+TRUST	이거 그냥 추정이죠?
+TRUST	오차가 크면 어떻게 돼요
+TRUST	믿을만한 데이터야?
+TRUST	검증된 결과인가요
+TRUST	보장해주는 거예요?
+TRUST	공공데이터 맞아요?
+TRUST	세입자한테 이 금액 약속해도 돼요?
+TRUST	계약서에 이 금액 써도 되나요
+TRUST	가정값이 뭐예요
+TRUST	정확함?
+TRUST	이거 얼마나 정확한데
+TRUST	1010만원 절감이 확정이에요?
+TRUST	어디서 나온 숫자예요
+TRUST	R2 0.655면 낮은 거 아니에요?
+VIEW_TENANT	세입자 입장은?
+VIEW_TENANT	저 세입자예요
+VIEW_TENANT	임차인 기준으로 다시 설명해 주세요
+VIEW_TENANT	세입자는 뭐가 좋아요
+VIEW_TENANT	세입자한테 설명하듯이 말해줘
+VIEW_TENANT	입주 업체 입장에서 보면요
+VIEW_TENANT	세입자는 한달에 얼마 아끼는데
+VIEW_TENANT	임차인 버전
+VIEW_OWNER	건물주 입장으로 돌려줘
+VIEW_OWNER	저는 건물주인데요
+VIEW_OWNER	집주인 기준으로
+VIEW_OWNER	임대인 입장에서는요?
+VIEW_OWNER	다시 건물주 시점
+VIEW_OWNER	주인 입장에서 설명해봐
+VIEW_OWNER	건물주는 얼마 버는데
+VIEW_OWNER	오너 관점
+OUT	안녕하세요
+OUT	고마워요
+OUT	오늘 날씨 어때
+OUT	보일러 추천해 주세요
+OUT	단열 창호 어디서 사요
+OUT	결제 어떻게 해요
+OUT	너는 누구니
+OUT	ㅋㅋㅋㅋㅋ
+OUT	점심 추천
+OUT	주식 하지 마?
+OUT	유료예요?
+OUT	회원가입 해야 돼요?
+OUT	시공 업체 소개해 주세요
+OUT	3천만원짜리 보일러 괜찮아요?
+OUT	8월에 휴가 어디 가지
+OUT	대출 이자 계산해줘
+OUT	그린리모델링 사업 신청 방법
+OUT	ㅇㅇ
+OUT	네
+OUT	아 그렇구나
+OUT	뭘 할 수 있어?
+OUT	상담원 연결
+OUT	앱 다운로드 어디서 해요
+OUT	asdfgh
+OUT	배고프다

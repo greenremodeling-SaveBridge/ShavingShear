@@ -1,0 +1,12 @@
+# 설치물·캐시
+node_modules/
+.venv/
+__pycache__/
+.pytest_cache/
+# 빌드 중간물 (화면빌드 · build:preview · 다건물검증 결과)
+/web/
+/out/
+backend/multi_check_out/
+# WSL 에서 다시 빌드한 리눅스 실행기
+backend/saving_ai/saving_ai_linux
+ai/saving_ai_linux
