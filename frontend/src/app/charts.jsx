@@ -95,7 +95,8 @@ export function BaselineChart({ rows, anomalies }) {
   const D = useMemo(() => prepare(rows, anomalies), [rows, anomalies]);
   if (!D) return <p className="t-b2">표시할 월별 자료가 없어요.</p>;
 
-  const H = w >= 600 ? 280 : w >= 480 ? 260 : 228;
+  const short = typeof window !== 'undefined' && window.innerHeight < 860 && w >= 480;   // 노트북 화면 · 한 화면에 들어가게
+  const H = short ? 200 : w >= 600 ? 280 : w >= 480 ? 260 : 228;
   const M = { l: 34, r: 6, t: 32, b: 26 };
   const iw = Math.max(10, w - M.l - M.r), ih = H - M.t - M.b;
   const span = Math.max(1, D.o1 - D.o0);

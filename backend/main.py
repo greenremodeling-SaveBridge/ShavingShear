@@ -25,6 +25,7 @@ from explain import explain as make_explanation
 from measures import diagnose, apply_measures, MEASURES, MEASURES_HOUSE
 import pricing
 import benefit as benefit_mod
+import house_bill as HB
 
 # 실행 위치와 상관없이 이 파일 옆의 DB·화면을 쓴다
 BASE_DIR = Path(__file__).resolve().parent
@@ -857,7 +858,55 @@ def get_measures(bld_id: int = 1, ids: str = ""):
     r["bld_id"] = bld_id
     r["area"] = prof["area"]
     r["is_house"] = house
+    if house and r.get("available"):
+        _house_bills(r, bld_id)
     return r
+
+
+def _house_bills(r, bld_id):
+    """단독주택 · 평균단가 대신 달마다 실제 요금표로 고지서를 계산해 절감액(원)을 바꿔 쓴다 (house_bill.py)"""
+    y = str(r["base_year"])
+    rows = query("SELECT ym, elec, gas FROM usage_monthly WHERE bld_id=? AND ym LIKE ? ORDER BY ym", (bld_id, y + "%"))
+    if len(rows) != 12 or any(x["elec"] is None or x["gas"] is None for x in rows):
+        return
+    E = [(int(x["ym"][4:]), x["elec"]) for x in rows]
+    G = [(int(x["ym"][4:]), x["gas"]) for x in rows]
+    e0, g0 = HB.year_elec(E), HB.year_gas(G)
+    picks = {m["id"]: m for m in MEASURES_HOUSE}
+
+    def keep(ms, side):
+        k = 1.0
+        for m in ms:
+            if "fixed_kwh" not in m:
+                k *= 1 - (m["rate_low"] if side == 0 else m["rate_high"])
+        return k
+
+    def gen(ms, side):
+        return sum(m["fixed_kwh"][side] for m in ms if "fixed_kwh" in m)
+
+    # 대책 하나씩 (그 대책만 했을 때 고지서가 얼마나 주나)
+    for row in r["measures"]:
+        m = picks[row["id"]]
+        for side, key in ((0, "saving_won_low"), (1, "saving_won_high")):
+            if m["target"] == "elec":
+                row[key] = e0 - HB.year_elec(E, keep([m], side), gen([m], side))
+            else:
+                row[key] = g0 - HB.year_gas(G, keep([m], side))
+    # 고른 대책 전부 · 겹치는 효과까지
+    sel = [picks[x["id"]] for x in r["measures"]]
+    el = [m for m in sel if m["target"] == "elec"]
+    ga = [m for m in sel if m["target"] == "gas"]
+    e_after = [HB.year_elec(E, keep(el, s), gen(el, s)) for s in (0, 1)]
+    g_after = [HB.year_gas(G, keep(ga, s)) for s in (0, 1)]
+    for fuel, before, after in (("elec", e0, e_after), ("gas", g0, g_after)):
+        if fuel in r["by_fuel"]:
+            r["by_fuel"][fuel]["saving_won_low"] = before - after[0]
+            r["by_fuel"][fuel]["saving_won_high"] = before - after[1]
+            r["by_fuel"][fuel]["bill_after_won"] = [after[1], after[0]]
+    r["total_saving_won"] = [sum(t["saving_won_low"] for t in r["by_fuel"].values()),
+                             sum(t["saving_won_high"] for t in r["by_fuel"].values())]
+    r["bills"] = {"elec_won": e0, "gas_won": g0, "elec_after_won": [e_after[1], e_after[0]], "gas_after_won": [g_after[1], g_after[0]],
+                  "basis": "고지서 기준(부가세·전력기금 포함) · 한전 주택용 누진 요금표와 서울도시가스 주택용 요금표로 달마다 계산 · 태양광은 남는 전기를 다음 달로 넘김"}
 
 
 # ══════════════════════════════════════════════════════
@@ -871,8 +920,11 @@ def get_benefit(bld_id: int = 1, ids: str = ""):
     if not m.get("available"):
         return {"bld_id": bld_id, "available": False, "reason": m.get("reason")}
     p = m["prices"]
-    cur_e = round(m["base_elec_kwh"] * p["elec"]["won_per_kwh"])
-    cur_g = round(m["base_gas_kwh"] * p["gas"]["won_per_kwh"])
+    if m.get("bills"):                      # 단독주택 · 고지서 기준
+        cur_e, cur_g = m["bills"]["elec_won"], m["bills"]["gas_won"]
+    else:
+        cur_e = round(m["base_elec_kwh"] * p["elec"]["won_per_kwh"])
+        cur_g = round(m["base_gas_kwh"] * p["gas"]["won_per_kwh"])
     lo, hi = m["total_saving_won"]
     fuel = m["by_fuel"]
     sch = m["schedule"]
@@ -886,6 +938,7 @@ def get_benefit(bld_id: int = 1, ids: str = ""):
         # 지금 1년에 내는 전기·가스 요금 (최근 완전한 해 × 단가)
         "current": {"elec_won": cur_e, "gas_won": cur_g, "total_won": cur_e + cur_g,
                     "elec_kwh": m["base_elec_kwh"], "gas_kwh": m["base_gas_kwh"]},
+        "bills": m.get("bills"),
         # 고른 공사로 1년에 줄어드는 요금
         "saving": {
             "elec_won": [fuel.get("elec", {}).get("saving_won_low", 0), fuel.get("elec", {}).get("saving_won_high", 0)],

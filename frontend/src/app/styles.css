@@ -1638,3 +1638,33 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 .ms-cost { font-size: 13px; line-height: 19px; font-weight: 600; color: var(--text-2); }
 .info-pop-in { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .info-pop-in p + p { margin-top: 6px; }
+
+/* ══ 낮은 화면(노트북 1280×720 · 1366×768) · PC 도 스크롤 없이 ══ */
+@media (max-height: 860px) {
+  .pc .d-ticker { display: none; }                    /* 맨 위 칩과 같은 숫자 */
+  .pc .d-nav { height: 48px; }
+  .pc .panel { padding-top: 10px; }
+  .pc .p-status { margin-bottom: 4px; }
+  .p-headrow { margin-bottom: 6px; }
+  .pc .ybars { height: 130px; }
+  .pc .fold-btn { min-height: 44px; padding: 10px 0; font-size: 15px; }
+  .pc .ms { padding: 7px 0; }
+  .pc .ms-n { font-size: 15px; line-height: 22px; }
+  .pc .ms-v { font-size: 14px; line-height: 20px; }
+  .pc .ms-cost { line-height: 17px; }
+  .pc .step-t { font-size: 22px; line-height: 30px; }
+  .pc .step-main { margin-top: 16px; }
+  .pc .sum-c { padding: 12px 14px; gap: 2px; }
+  .pc .sum-v { font-size: 17px; line-height: 24px; }
+  .pc .ben-c { padding: 12px 14px; gap: 6px; }
+  .pc .ben-c .row { padding: 6px 0; }
+  .pc .ben-big { font-size: 19px; line-height: 26px; }
+  .pc .hero { padding-top: 20px; padding-bottom: 20px; }
+}
+@media (max-height: 760px) {
+  .pc .hero-steps { gap: 6px; }
+  .pc .hero-steps button { padding: 7px 12px; }
+  .pc .hero-steps span { display: none; }
+  .pc .more-btn { margin-top: 12px; height: 44px; }
+}
+.step-l:has(.doc) .step-head { display: none; }   /* 계약서는 종이 머리글이 제목 · 모바일도 */

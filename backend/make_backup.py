@@ -29,10 +29,13 @@ warnings.filterwarnings("ignore")
 import main
 from main import (get_building, get_eligibility, get_baseline, get_demo,
                   get_settlement, get_explain, get_profile, get_measures,
-                  post_allocation, AllocationRequest)
+                  post_allocation, AllocationRequest, get_benefit)
 
-# 화면 ① 의 기본 주소 코드와 같아야 합니다
-CODES = ("11680", "10100", "0761", "0026")
+# 화면 ① 의 첫 건물(단독주택, 건물 3)과 같아야 합니다 — 2026-10-25 건물 1 → 3
+BLD = 3
+CODES = ("11680", "10300", "0123", "0004")
+# 세이빙 AI 추천 질문 — 서버가 꺼져도 이 질문들은 답한다 (요구서 4-6)
+CANNED = ["세입자는 매달 얼마 아껴요?", "집은 며칠 비워야 해요?", "공사비는 얼마예요?", "이 금액 믿어도 돼요?"]
 OUT = "web/backup.json"
 
 
@@ -52,8 +55,8 @@ def _db_meta():
 
 def build():
     main._cache.clear()                     # 반드시 현재 DB 로 다시 계산
-    demo = get_demo()
-    base = get_baseline(1)
+    demo = get_demo(BLD)
+    base = get_baseline(BLD)
     snap = {
         "meta": {
             "generated_at": datetime.now().isoformat(timespec="seconds"),
@@ -65,15 +68,16 @@ def build():
             "note": "지표는 정렬된 데이터의 앞 24행 학습 · 다음 12행 검증 결과이며 전체 기간 성능이 아닙니다",
         },
         "building": get_building(*CODES),
-        "eligibility": get_eligibility(1),
+        "eligibility": get_eligibility(BLD),
         "baseline": base,
-        "profile": get_profile(1),
-        "measures": get_measures(1),
+        "profile": get_profile(BLD),
+        "measures": get_measures(BLD),
+        "benefit": get_benefit(BLD),
         "demo": demo,
         # 슬라이더가 5% 단위이므로 19가지를 모두 저장해 둔다
         "allocation": [
             post_allocation(AllocationRequest(
-                invest_won=50_000_000, owner_ratio=r / 100, period_years=10))
+                bld_id=BLD, invest_won=50_000_000, owner_ratio=r / 100, period_years=10))
             for r in range(5, 100, 5)
         ],
         "settlement": {},
@@ -82,11 +86,13 @@ def build():
 
     cases = [(c["year"], c["quarter"]) for c in demo["cases"]] + [(2026, 3)]
     for y, q in cases:
-        s = get_settlement(year=y, quarter=q, owner_ratio=0.7)
+        s = get_settlement(bld_id=BLD, year=y, quarter=q, owner_ratio=0.7)
         snap["settlement"][f"{y}Q{q}"] = s
         for m in s["months"]:
             if m["ym"] not in snap["explain"]:
-                snap["explain"][m["ym"]] = get_explain(1, m["ym"])
+                snap["explain"][m["ym"]] = get_explain(BLD, m["ym"])
+    from assist import post_assist, AssistReq
+    snap["assist_canned"] = {q: post_assist(AssistReq(message=q, context={"bld_id": BLD})) for q in CANNED}
 
     # 직전 백업과 비교 — 숫자가 바뀌었으면 보여준다
     prev = None

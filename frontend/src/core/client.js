@@ -112,6 +112,12 @@ async function fromBackup(path, body) {
       if (!ids.length || ids.length === (all.measures || []).length) return all;
       throw new ApiError('저장된 시연 데이터에서는 대책 선택을 바꿀 수 없습니다', { status: 409 });
     }
+    case '/api/benefit': {
+      const ids = (q.get('ids') || '').split(',').filter(Boolean);
+      const all = pick('benefit');
+      if (!ids.length || ids.length === (B.measures?.measures || []).length) return all;
+      throw new ApiError('저장된 시연 데이터에서는 공사 선택을 바꿀 수 없습니다', { status: 409 });
+    }
     case '/api/allocation': {
       const list = pick('allocation');
       if (body.invest_won !== BACKUP_INVEST || body.period_years !== BACKUP_YEARS) {

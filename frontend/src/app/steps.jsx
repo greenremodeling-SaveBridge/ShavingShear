@@ -224,7 +224,7 @@ const TENANT_IMPACT = {
   envelope: { stay: '나가지 않아도 돼요 · 바깥 비계 작업', noise: '보통~많음 · 소음·분진', note: '비계·가림막이 창과 출입구를 가릴 수 있어요' },
   boiler: { stay: '나가지 않아도 돼요 · 하루면 끝나요', noise: '적음', note: '바꾸는 날은 난방·온수가 잠깐 멈춰요' },
   led: { stay: '나가지 않아도 돼요 · 하루면 끝나요', noise: '적음', note: '천장 작업하는 자리만 잠깐 비워 주면 돼요' },
-  solar: { stay: '나가지 않아도 돼요 · 지붕 작업', noise: '보통 · 설치하는 날', note: '지붕 방향·그늘에 따라 발전량이 달라져요' },
+  solar: { stay: '나가지 않아도 돼요 · 지붕 작업', noise: '보통 · 설치하는 날', note: '남는 전기는 다음 달로 넘어가요(돈으로 받지 않아요) · 기본요금은 남아요 · 지붕 방향·그늘에 따라 발전량이 달라져요' },
 };
 /* m: 서버가 준 대책 한 줄 (공사 기간·집 비우는 기간은 서버 값) */
 function Impact({ m }) {
@@ -763,9 +763,17 @@ function BenefitView({ S }) {
             <h3>세입자 이득</h3>
             <p className="ben-big num">매달 {won(mlo)}~{won(mhi)}원</p>
             <div className="rows lined">
-              <Row k="지금 1년 요금" v={`${manwon(cur.total_won)} 원`} sub={`${d.base_year}년 사용량 × 단가 · 전기 ${won(cur.elec_won)}원 · 가스 ${won(cur.gas_won)}원`} />
-              <Row k="줄어드는 전기" v={`연 ${manRange(...sv.elec_won)}`} />
-              <Row k="줄어드는 가스" v={`연 ${manRange(...sv.gas_won)}`} />
+              <Row k="지금 1년 요금" v={`${manwon(cur.total_won)} 원`}
+                sub={`${d.base_year}년 · 전기 ${won(cur.elec_won)}원 · 가스 ${won(cur.gas_won)}원${d.bills ? ` · ${d.bills.basis}` : ''}`} />
+              {d.bills
+                ? <>
+                  <Row k="공사 뒤 전기요금" v={`연 ${manRange(...d.bills.elec_after_won)}`} />
+                  <Row k="공사 뒤 가스요금" v={`연 ${manRange(...d.bills.gas_after_won)}`} />
+                </>
+                : <>
+                  <Row k="줄어드는 전기" v={`연 ${manRange(...sv.elec_won)}`} />
+                  <Row k="줄어드는 가스" v={`연 ${manRange(...sv.gas_won)}`} />
+                </>}
             </div>
             <p className="ben-note">{t.note}</p>
           </section>
