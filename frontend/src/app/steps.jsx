@@ -279,7 +279,7 @@ function MeasView({ S }) {
                       <span className="ms-n">
                         {m.name}
                         <Info label={`${m.name} 자세히`}>
-                          <p>{tidy(m.addresses)}{rr.length === 2 ? ` · 절감률 ${pctRange(rr[0], rr[1])}` : ''}</p>
+                          <p>{tidy(m.addresses)}{rr.length === 2 ? ` · 절감률 ${rr[0] === rr[1] ? `${Math.round(rr[0] * 100)}%` : pctRange(rr[0], rr[1])}` : ''}</p>
                           {m.survey_note && <p>{tidy(m.survey_note)}</p>}
                           <p className="imp-src">절감 근거 · {m.basis_label || '가정값'}{m.source ? ` · ${tidy(m.source)}` : ''}</p>
                           {m.cost_source && <p className="imp-src">공사비 근거 · {tidy(m.cost_source)}</p>}
