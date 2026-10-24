@@ -28,9 +28,9 @@ def test_데이터없는_달은_정산문장_안씀():
     assert "정산" not in r["text"] and "예측 범위" not in r["text"]
 
 
-def test_공사전은_시뮬레이션으로_설명():
+def test_공사전은_예상치로_설명():
     t, a = ex.build_template(ctx())
-    assert a == "시뮬레이션" and "시뮬레이션" in t and "줄었" not in t
+    assert a == "예상치" and "예상치" in t and "줄었" not in t
     ok, hits = ex.verdict_ok(t, a)
     assert ok, hits
 
@@ -85,7 +85,7 @@ def _fake_genai(monkeypatch, reply=None, exc=None):
 
 
 def test_성공_후_캐시(monkeypatch):
-    _fake_genai(monkeypatch, reply="1월 금액은 공사 전 시뮬레이션입니다. 예측 오차는 19.4%입니다.")
+    _fake_genai(monkeypatch, reply="1월 금액은 공사 전 예상치입니다. 예측 오차는 19.4%입니다.")
     assert ex.explain(ctx())["source"] == "gemini"
     assert ex.explain(ctx())["source"] == "cache"
 

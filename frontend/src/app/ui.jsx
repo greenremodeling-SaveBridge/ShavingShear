@@ -154,6 +154,7 @@ export function StatusBadge({ code, fallback, lg = true }) {
 /* AI 설명 action · 한국어 값 그대로, 모르는 값은 회색 */
 const ACTION_TONE = {
   '시뮬레이션': { tone: 'amber', mark: 'sim' },
+  '예상치': { tone: 'amber', mark: 'sim' },
   '잠정 정산': { tone: 'blue', mark: 'prov' },
   '금액 확정': { tone: 'green', mark: 'fix' },
   '확정 보류': { tone: 'red', mark: 'hold' },

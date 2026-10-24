@@ -7,7 +7,7 @@
 ■ 제안서 9p 화면 흐름과 API 대응
     ① 주소 입력      → GET  /api/building
     ② 대상 판정      → GET  /api/eligibility
-    ③ 분배 시뮬레이터 → GET  /api/usage, /api/baseline, POST /api/allocation
+    ③ 분배 계산 → GET  /api/usage, /api/baseline, POST /api/allocation
     ④ 특약 초안      → (화면 설계로만 제시 · 14p)
     ⑤ 정산 리포트    → GET  /api/settlement, /api/explain
 """
@@ -73,7 +73,7 @@ STATUS = {
     "ESTIMATED": {
         "label": "추정",
         "amount": True,
-        "desc": "공사 전이므로 가정 기반 시뮬레이션 값입니다. 실제 절감 실적이 아닙니다",
+        "desc": "공사 전 예상치입니다",
     },
     "PROVISIONAL": {
         "label": "잠정",
@@ -134,13 +134,13 @@ def settlement_status(
         # 공사 전 — 검증할 절감량 자체가 없다. 전부 시뮬레이션이다.
         return "ESTIMATED", (
             "그린리모델링 공사 전이므로 실제 절감량이 존재하지 않습니다. "
-            "표시된 금액은 가정한 절감률을 적용한 시뮬레이션입니다"
+            "표시된 금액은 가정한 절감률을 적용한 예상치입니다"
         )
 
     if period_start_ym and period_start_ym < retrofit_ym:
         return "ESTIMATED", (
             f"정산 기간이 공사 완료({retrofit_ym[:4]}.{retrofit_ym[4:]}) 이전을 포함하므로 "
-            "공사 후 실측으로 검증할 수 없습니다. 표시된 금액은 시뮬레이션입니다"
+            "공사 후 실측으로 검증할 수 없습니다. 표시된 금액은 예상치입니다"
         )
 
     if not actual_based:
@@ -260,7 +260,7 @@ def baseline_of(bld_id: int):
 
 def month_won(bld_id: int, ym: str):
     """정산·차트가 쓰는 월 금액.
-    공사 후 달: (기저선 − 실측) × 단가 (실측 기반) · 공사 전 달: 분배 연간 금액과 같은 시뮬레이션(pricing.won)."""
+    공사 후 달: (기저선 − 실측) × 단가 (실측 기반) · 공사 전 달: 분배 연간 금액과 같은 예상치(pricing.won)."""
     if ym in _post.get(bld_id, {}):
         return _post[bld_id][ym]
     e, g = _fuel[bld_id][ym]
@@ -281,8 +281,7 @@ def data_origin(bld_id: int):
         src = SIMULATED_BUILDINGS.get(bld_id, "measured")
     simulated = src != "measured"
     if src == "simulated_house_demo":
-        note = ("가상 단독주택 — 서울 샘플의 월별 사용 패턴을 단독주택 한 가구 규모로 줄인 시연 데이터입니다. "
-                "실제 어느 집의 사용량이 아닙니다.")
+        note = "단독주택 한 가구 규모의 예상 사용량입니다."
     elif src == "simulated_retrofit_demo":
         note = ("가상 공사 시연 — 서울 샘플 사용량에 2025년 5월 가상 공사(전기 −15% · 가스 −30%)와 "
                 "11월 운영 변화 1건을 얹었습니다. 실제 절감 실적이 아닙니다.")
@@ -727,8 +726,8 @@ def get_settlement(
         if saving < 0:
             status_msg += " · 이 분기는 기저선보다 더 써서 나눌 절감액이 없습니다"
     else:
-        amount_state = "시뮬레이션 금액"
-        amount_note = ("가정한 절감률과 단가를 적용한 시뮬레이션 값입니다. "
+        amount_state = "예상 금액"
+        amount_note = ("가정한 절감률과 단가를 적용한 예상치입니다. "
                        "공사 후 실측으로 검증된 절감액이 아닙니다.")
     share = max(0, saving)
 

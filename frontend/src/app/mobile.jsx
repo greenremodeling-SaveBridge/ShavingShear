@@ -117,11 +117,6 @@ export function MobileApp({ S, onExit }) {
         <div className="m-prog" role="progressbar" aria-label="진행 단계" aria-valuemin={1} aria-valuemax={STEPS.length} aria-valuenow={i + 1}>
           {STEPS.map((s, k) => <i key={s.id} className={cx(k <= i && 'on')} />)}
         </div>
-        {S.sim && (
-          <div className="m-alert purple" role="note">
-            <span><b>가상 데이터</b> · {S.sim.note || '실제 사용량이 아니에요'}</span>
-          </div>
-        )}
         {c.action && (
           <div className={cx('m-alert', c.tone)}>
             <span>{c.tone === 'red' ? '저장된 시연 데이터로 이어서 볼 수 있어요' : '서버가 다시 연결됐어요'}</span>

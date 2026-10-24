@@ -10,9 +10,14 @@ export const SAMPLE_RETROFIT = {
   address: '양평 블룸비스타 (가상)',
   codes: { sigungu: '41830', bjdong: '32330', bun: '1235', ji: '0000' },
 };
+/* 단독주택 시연 (2026-10-24 회의) — 공공데이터가 없는 주거라 가상 데이터(건물 3) */
+export const SAMPLE_HOUSE = {
+  address: '서울 ○○구 ○○동 단독주택',
+  codes: { sigungu: '11680', bjdong: '10300', bun: '0123', ji: '0004' },
+};
 export const SAMPLES = [
-  { ...SAMPLE, badge: ['blue', '실측 · 공사 전'] },
-  { ...SAMPLE_RETROFIT, badge: ['purple', '가상 · 공사 후'] },
+  { ...SAMPLE_HOUSE, badge: ['purple', '단독주택'] },
+  { ...SAMPLE, badge: ['blue', '근린생활시설'] },
 ];
 
 export const CODE_FIELDS = [
@@ -51,7 +56,7 @@ export const STATUS = {
 export const statusOf = (code, fallback) =>
   STATUS[code] || { tone: 'gray', label: fallback || '상태 미상', sub: '', icon: 'unknown' };
 
-/* 월별 state — '정산' 달은 분기 상태에 맞춰 시뮬레이션/잠정/검증 완료로 부른다 */
+/* 월별 state — '정산' 달은 분기 상태에 맞춰 예상치/잠정/검증 완료로 부른다 */
 export function monthLabel(state, code) {
   if (state === '정산') {
     if (code === 'PROVISIONAL') return { text: '잠정', tone: 'orange' };
@@ -67,6 +72,7 @@ export function monthLabel(state, code) {
 export const ACTION = {
   '데이터 없음': { tone: 'gray',   icon: 'none' },
   '시뮬레이션':  { tone: 'blue',   icon: 'sim' },
+  '예상치':      { tone: 'blue',   icon: 'sim' },
   '확정 보류':   { tone: 'red',    icon: 'hold' },
   '잠정 정산':   { tone: 'orange', icon: 'prov' },
   '금액 확정':   { tone: 'green',  icon: 'fix' },
@@ -125,6 +131,11 @@ export const fetchMeasures = (id, ids) =>
       'total_saving_rate', 'total_co2_kg'], '개선 대책');
     return d;
   });
+
+/* 혜택 정리 · 세입자(줄어든 요금) · 집 비우는 기간 · 건물주(건물 가치) — 금액은 서버 계산 그대로 */
+export const fetchBenefit = (id, ids, property) =>
+  api(`/api/benefit?bld_id=${id}${ids ? '&ids=' + ids.join(',') : ''}${property ? '&property_won=' + Math.round(property) : ''}`)
+    .then(d => need(d, ['available'], '혜택'));
 
 export const fetchBaseline = id =>
   api(`/api/baseline?bld_id=${id}`).then(d => need(d, ['metrics', 'monthly_baseline'], '기저선'));

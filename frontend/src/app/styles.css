@@ -1598,9 +1598,6 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 .pc .p-status .d-back-go { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; }
 
 /* 추천 공사 · 공사 기간(가정) */
-.ms-build { padding-top: 12px; }
-.ms-build .field { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.ms-build .field-l { display: inline-flex; align-items: center; font-size: 15px; color: var(--text-2); }
 
 /* ══ ⑨ 결론 정리 ══ */
 .sum { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
@@ -1617,3 +1614,22 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 .ss-calc { margin-top: 12px; padding-top: 4px; border-top: 1px solid var(--line); }
 .pc .step-body.solo .step-l:has(.sum) { max-width: none; }
 .pc .sum { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* ══ ⑥ 이득 확인 · 세입자 | 집 비우는 기간 | 건물주 ══ */
+.ben { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.ben-c { display: grid; gap: 8px; align-content: start; padding: 16px 18px; border-radius: 16px; background: var(--surface-2); }
+.ben-c.tenant { background: var(--primary-weak); }
+.ben-c.owner { background: color-mix(in srgb, #1F4F58 9%, var(--surface)); }
+.ben-c h3 { font-size: 14px; font-weight: 700; color: var(--text-2); }
+.ben-big { font-size: 22px; line-height: 30px; font-weight: 800; letter-spacing: -0.02em; }
+.ben-c .rows { padding: 0 12px; border-radius: 12px; background: var(--surface); }
+.ben-c .row { padding: 9px 0; }
+.ben-c .row-k, .ben-c .row-v { font-size: 14px; line-height: 21px; }
+.ben-note { font-size: 13px; line-height: 19px; color: var(--text-3); }
+.ben-prop .field { gap: 4px; }
+.pc .step-body.solo .step-l:has(.ben) { max-width: none; }
+.pc .ben { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* 추천 공사 · 원·공사 일정 */
+.ms-won { font-weight: 700; color: var(--primary-text); }
+.ms-sch { font-size: 13px; line-height: 19px; color: var(--text-3); }
+.prof-cost { font-size: 14px; font-weight: 600; color: var(--text-2); }

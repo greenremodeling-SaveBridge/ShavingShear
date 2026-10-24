@@ -4,7 +4,7 @@
    홈이든 단계든 같은 판, 같은 제목 자리, 같은 줄 모양을 쓴다.
    ══════════════════════════════════════════════════════════════ */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { cx, won, kwh, pct, pct1, ymTxt, firstSentence, koMoney } from '../core/format.js';
+import { cx, won, kwh, pct, pct1, ymTxt, firstSentence, koMoney, manwon, manRange } from '../core/format.js';
 import { hasAmount, fetchSettlement, fetchExplain } from '../core/domain.js';
 import { useResource, usePersistent, useTheme } from '../core/hooks.js';
 import { AmountField, BuddyBody, BuddyFace, Badge, BrandMark, Button, ErrorBox, Icon, Row, Sheet, Skeleton, Stepper, connInfo, monthBadge, statusText, usePulse } from './ui.jsx';
@@ -17,11 +17,11 @@ import { useAssist, useJumpBack } from './assistant/context.js';
 import { Assistant } from './assistant/Assistant.jsx';
 import { AskLink } from './assistant/Nudge.jsx';
 import { chipOf, chipsFor, saveMe } from '../core/assist.js';
-import { INVEST, YEARS } from '../core/useSavingShare.js';
+import { INVEST, PROPERTY } from '../core/useSavingShare.js';
 import { ViewSetting } from './viewMode.jsx';
 
 const NAV = [{ id: 'home', name: '홈' }, ...GROUPS.filter(g => g.id !== 'sys').map(g => ({ id: g.id, name: g.name }))];
-const HOME_TABS = [{ id: 'setl', name: '월별 절약 결과' }, { id: 'base', name: '원래 사용량 예측' }, { id: 'meas', name: '추천 공사' }];
+const HOME_TABS = [{ id: 'alloc', name: '이득 확인' }, { id: 'meas', name: '추천 공사' }, { id: 'base', name: '원래 사용량 예측' }];
 
 function useLocal(key, init) {
   const [v, setV] = useState(() => {
@@ -45,31 +45,18 @@ function phasesOf(rows) {
 }
 
 /* ── 위 메뉴 ── */
-function Nav({ page, goPage, onSearch, onNotice }) {
+function Nav({ goPage }) {
   return (
     <nav className="d-nav" aria-label="주 메뉴">
       <button type="button" className="brand" onClick={() => goPage('home')} aria-label="세이빙 셰어 홈">
         <BrandMark /><span className="brand-name">세이빙 셰어</span>
-      </button>
-      <div className="d-menu">
-        {NAV.map(n => (
-          <button key={n.id} type="button" aria-current={page === n.id ? 'page' : undefined} onClick={() => goPage(n.id)}>{n.name}</button>
-        ))}
-      </div>
-      {/* 유의 안내 · 따로 한 줄을 차지하지 않고 메뉴 줄에 작게 (누르면 계산 방식) */}
-      <button type="button" className="d-note" onClick={onNotice} title="공사 전 금액 유의 안내 · 계산 방식 보기">
-        <Icon name="megaphone" size={16} />공사 전 금액 유의
-      </button>
-      <button type="button" className="d-search" onClick={onSearch}>
-        <Icon name="search" size={20} />
-        <span><kbd>/</kbd> 를 눌러 건물을 찾으세요</span>
       </button>
     </nav>
   );
 }
 
 /* ── 지금 조건 · 판 맨 위에 늘 보이고, 숫자를 누르면 그 자리에서 바꾼다 (모든 단계 계산에 바로 반영) ── */
-const COND = [['ratio', '나눌 비율', ''], ['years', '분배 기간', '기간'], ['invest', '공사비', '공사비']];   // 키 · 이름 · 칩에 붙는 짧은 이름
+const COND = [['invest', '공사비'], ['property', '집값'], ['sched', '공사 일정']];
 function CondBar({ S, go, here }) {
   const [open, setOpen] = useState(null);
   const jb = useJumpBack();
@@ -82,39 +69,40 @@ function CondBar({ S, go, here }) {
     window.addEventListener('keydown', esc);
     return () => { document.removeEventListener('pointerdown', away, true); window.removeEventListener('keydown', esc); };
   }, [open]);
-  const manual = () => { if (S.aiDraft) S.setAiDraft(false); };   // 직접 바꾸면 더는 'AI가 정리한 문안'이 아니다
+  const bn = S.benefit.data?.available ? S.benefit.data : null;
+  const sch = bn?.schedule;
   const val = {
-    ratio: <>건물주 <b className="num">{pct1(S.ratio)}</b> · 임차인 <b className="num">{pct1(1 - S.ratio)}</b></>,
-    years: <b className="num">{S.years}년</b>,
     invest: <b className="num">{koMoney(S.invest)}</b>,
+    property: <b className="num">{koMoney(S.property)}</b>,
+    sched: <b className="num">{sch ? `${sch.total_days}일${sch.vacate_days ? ` · 비움 ${sch.vacate_days}일` : ''}` : '—'}</b>,
   };
+  const to = { invest: 'alloc', property: 'alloc', sched: 'meas' };
   return (
     <div className="cond" ref={box} role="group" aria-label="지금 조건">
-      {COND.map(([k, name, short]) => (
+      {COND.map(([k, name]) => (
         <div key={k} className="cond-i">
           <div className={cx('cond-chip', open === k && 'on')}>
-            {/* ① 바로 바꾸기 (칩을 눌러도 같음) */}
-            <button type="button" className="cond-v" aria-expanded={open === k} aria-label={`${name} 바로 바꾸기`}
-              onClick={() => setOpen(o => (o === k ? null : k))}>
-              {short && <span className="cond-k">{short}</span>}{val[k]}<Icon name="sliders" size={14} />
+            {/* ① 바로 바꾸기 (공사 일정은 4단계에서 공사를 골라 바꾼다) */}
+            <button type="button" className="cond-v" aria-expanded={k === 'sched' ? undefined : open === k} aria-label={`${name} ${k === 'sched' ? '' : '바로 바꾸기'}`}
+              onClick={() => (k === 'sched' ? (jb.mark(k), go('meas')) : setOpen(o => (o === k ? null : k)))}>
+              <span className="cond-k">{name}</span>{val[k]}{k !== 'sched' && <Icon name="sliders" size={14} />}
             </button>
-            {/* ② 분배 화면에 가서 바꾸기 · 가면 그 자리가 이전 화면 버튼이 된다 */}
+            {/* ② 그 화면에 가서 바꾸기 · 가면 그 자리가 이전 화면 버튼이 된다 */}
             {jb.on && jb.which === k
               ? <button type="button" className="cond-go back" aria-label="이전 화면" title="이전 화면" onClick={jb.back}><Icon name="left" size={14} /></button>
-              : here !== 'alloc' && (
-                <button type="button" className="cond-go" aria-label={`분배 화면에서 ${name} 바꾸기`} title="분배 화면에서 바꾸기"
-                  onClick={() => { setOpen(null); jb.mark(k); go('alloc'); }}><Icon name="right" size={14} /></button>
+              : here !== to[k] && (
+                <button type="button" className="cond-go" aria-label={`${name} 화면에서 바꾸기`} title={`${stepById(to[k]).name}에서 보기`}
+                  onClick={() => { setOpen(null); jb.mark(k); go(to[k]); }}><Icon name="right" size={14} /></button>
               )}
           </div>
           {open === k && (
             <div className="cond-pop soft-in" role="dialog" aria-label={`${name} 바꾸기`}>
-              {k === 'ratio' && <RatioControl S={S} need={S.allocation.data?.required_owner_ratio} onSettle={manual} />}
-              {k === 'years' && <Stepper label="분배 기간" value={S.years} min={YEARS.min} max={YEARS.max} unit="년" onChange={v => { S.setYears(v); manual(); }} />}
-              {k === 'invest' && <AmountField label="공사비" value={S.invest} min={INVEST.min} max={INVEST.max} onChange={v => { if (v != null && v !== S.invest) { S.setInvest(v); manual(); } }} />}
-              {S.allocation.data && (
+              {k === 'invest' && <AmountField label="공사비" value={S.invest} min={INVEST.min} max={INVEST.max} onChange={v => { if (v != null && v !== S.invest) S.setInvest(v); }} />}
+              {k === 'property' && <AmountField label="집값(시세)" value={S.property} min={PROPERTY.min} max={PROPERTY.max} onChange={v => { if (v != null && v !== S.property) S.setProperty(v); }} />}
+              {bn && (
                 <p className="cond-out num">
-                  건물주 {S.allocation.data.payback_years != null ? `${S.allocation.data.payback_years}년에 회수` : '회수 어려움'}
-                  {' · '}세입자 매달 {won(S.allocation.data.tenant_monthly_won)}원
+                  세입자 매달 {won(bn.tenant.monthly_won[0])}~{won(bn.tenant.monthly_won[1])}원
+                  {bn.owner.value.gain_won && <>{' · '}건물 가치 +{koMoney(bn.owner.value.gain_won[0])}~{koMoney(bn.owner.value.gain_won[1])}</>}
                 </p>
               )}
             </div>
@@ -141,7 +129,6 @@ function PanelStatus({ S, onAbout, lead }) {  // lead: 돌아가기 · 지금 �
         </span>
       </span>
       {c.action && <Button variant="weak" size="s" onClick={c.action.run}>{c.action.label}</Button>}
-      {S.sim && <span className="p-sim" role="note"><b>가상 데이터 · 시연용</b><span>{S.sim.note || '실제 사용량이 아니에요'}</span></span>}
       <button type="button" className="ai-intro icon" onClick={onAbout} title="계산 방법 · 세이빙 셰어 AI 소개" aria-label="계산 방법 보기"><Icon name="sparkle" size={16} /></button>
     </div>
   );
@@ -149,38 +136,31 @@ function PanelStatus({ S, onAbout, lead }) {  // lead: 돌아가기 · 지금 �
 
 /* ── 홈 요약 칸 6개 · 단계마다 하나 ── */
 function Tiles({ S, go }) {
-  const el = S.eligibility.data, pr = S.profile.data, me = S.measures.data, ba = S.baseline.data, al = S.allocation.data, se = S.settlement.data;
+  const el = S.eligibility.data, pr = S.profile.data, me = S.measures.data, ba = S.baseline.data;
+  const bn = S.benefit.data?.available ? S.benefit.data : null;
   const last = pr?.years?.[pr.years.length - 1];
   const rr = me?.available ? me.total_saving_rate : null;
   const kk = me?.available ? me.total_saving_kwh : null;
   const recent = (ba?.monthly_baseline || []).slice(-24);
   const fail = baselineFail(ba), pass = baselinePass(ba);
-  const pb = al?.payback_years;
-  const has = se && hasAmount(se);
-  // 칸에는 이름과 값만. 상태는 회색 글씨 대신 꼬리표로
-  const SETL_SHORT = {
-    ESTIMATED: ['amber', '예상 금액'], PROVISIONAL: ['blue', '잠정'], VERIFIED: ['green', '검증 완료'],
-    REVIEW_REQUIRED: ['red', '정산 보류'], INSUFFICIENT_DATA: ['gray', '정산 불가'],
-  };
-  const sb = se && SETL_SHORT[se.status_code];
   const tiles = [
     { id: 'elig', k: '지원 대상', mini: <MiniChecks list={(el?.checks || []).map(c => c.ok)} />,
       v: el && (el.eligible ? `지원사업 ${el.programs?.length || 0}개` : '대상 아님') },
     { id: 'prof', k: last ? `${last.year}년 사용량` : '사용량', mini: <MiniBars values={(pr?.years || []).map(y => y.total)} />,
       v: last && `${kwh(last.total)} kWh` },
     { id: 'meas', k: '절감 가능', mini: <MiniRange lo={rr?.[0] ?? 0} hi={rr?.[1] ?? 0} />,
-      v: rr && pctRange(rr[0], rr[1]), badge: kk && ['gray', '가정으로 계산한 값'] },
+      v: rr && pctRange(rr[0], rr[1]), badge: kk && ['amber', '예상치'] },
     { id: 'base', k: '원래 사용량 예측', mini: <MiniLines a={recent.map(r => r.actual)} b={recent.map(r => r.baseline)} />,
       v: ba && (fail ? '범위로 제시' : pass ? '기준 충족' : '판정 없음'), vTone: fail ? 'amber' : pass ? 'green' : null },
-    { id: 'alloc', k: '공사비 회수', mini: <MiniSplit ratio={al?.owner_ratio ?? S.ratio} />,
-      v: al && (Number.isFinite(pb) && pb < 99 ? `${pb}년` : '기간 안에 어려워요'), badge: al && (ba?.saving_basis?.actual_based ? ['blue', '공사 후 실측'] : ['amber', '예상 금액']) },
-    { id: 'setl', k: se ? se.period : '분기 금액', mini: <MiniBars values={(se?.months || []).map(m => (m.saving_won == null ? NaN : m.saving_won))} />,
-      v: se && (has ? `${won(se.saving_won)}원` : (se.amount_state || '금액 없음')), vTone: se && !has ? 'muted' : null, badge: sb },
+    { id: 'alloc', k: '세입자 매달', mini: <MiniRange lo={bn ? bn.tenant.monthly_won[0] / Math.max(1, bn.current.total_won / 12) : 0} hi={bn ? bn.tenant.monthly_won[1] / Math.max(1, bn.current.total_won / 12) : 0} />,
+      v: bn && `${won(bn.tenant.monthly_won[0])}~${won(bn.tenant.monthly_won[1])}원`, badge: bn && ['amber', '예상치'] },
+    { id: 'meas', k: '공사 일정', mini: <MiniChecks list={(bn?.schedule.works || []).map(w => !w.vacate_days)} />,
+      v: bn && `${bn.schedule.total_days}일${bn.schedule.vacate_days ? ` · 비움 ${bn.schedule.vacate_days}일` : ''}` },
   ];
   return (
     <div className="tiles">
       {tiles.map(t => (
-        <button key={t.id} type="button" className="tile" onClick={() => go(t.id)} aria-label={`${t.k} ${t.v || ''} · ${stepById(t.id).name} 보기`}>
+        <button key={t.k} type="button" className="tile" onClick={() => go(t.id)} aria-label={`${t.k} ${t.v || ''} · ${stepById(t.id).name} 보기`}>
           <span className="tile-mini">{t.mini}</span>
           <span className="tile-t">
             <span className="tile-k">{t.k}</span>
@@ -246,7 +226,7 @@ function Coach({ box, sel, deps, onClose }) {
 
 /* ── 홈 ── */
 /* 처음 온 사람용 · 무엇을 어떤 순서로 보면 되는지 한 줄로 */
-const GUIDE = [['bld', '건물 확인'], ['prof', '사용량 진단'], ['alloc', '나눌 비율 정하기'], ['setl', '정산 받기']];
+const GUIDE = [['bld', '건물 확인'], ['meas', '공사 고르기'], ['alloc', '이득 확인'], ['draft', '계약서']];
 function StartGuide({ go, onSearch, onClose }) {
   return (
     <div className="guide soft-in">
@@ -269,41 +249,31 @@ function StartGuide({ go, onSearch, onClose }) {
 }
 
 /* 열자마자 보이는 한 장 · 이 건물에서 얼마를 아낄 수 있는지 + 어디부터 보면 되는지 */
-function HomeHero({ S, go, onSearch }) {
-  const se = S.settlement.data;
-  const has = se && hasAmount(se);
-  const st = se ? statusText(se.status_code) : null;
-  const plain = !se ? '' : se.status_code === 'VERIFIED' ? '실제 사용량으로 확인한 금액이에요.'
-    : se.status_code === 'PROVISIONAL' ? '실제 사용량으로 계산했지만, 아직 확정은 아니에요.'
-    : se.status_code === 'ESTIMATED' ? '공사 전이라 실제로 아낀 금액이 아니라, 가정으로 계산한 예상이에요.'
-    : '지금은 금액을 정할 수 없어요. 이유는 오른쪽에서 확인할 수 있어요.';
-  const ratio = se?.owner_ratio ?? S.ratio;
-  const STEP4 = [['bld', '건물이 맞는지 확인', '주소와 면적을 봐요'], ['prof', '얼마나 쓰는지 보기', '해마다 전기·가스 사용량'], ['alloc', '이익 나누는 비율 정하기', '건물주와 세입자 몫'], ['setl', '매달 절약 결과 보기', '정산 금액 확인']];
+function HomeHero({ S, go }) {
+  const bn = S.benefit.data?.available ? S.benefit.data : null;
+  const v = bn?.owner.value;
+  const STEP4 = [['bld', '건물 확인', '주소와 면적'], ['meas', '공사 고르기', '공사별 절감·기간'], ['alloc', '이득 확인', '세입자와 건물주'], ['draft', '계약서', '조항 확인']];
   return (
     <section className="hero" aria-label="한눈에 보기">
       <div>
-        <p className="hero-k">{se ? se.period : '분기'} 절약 금액 {st && <Badge tone={st.tone} mark={st.mark}>{st.text}</Badge>}</p>
-        {se ? (
-          has
-            ? <p className="hero-n num">{won(se.saving_won)}<small>원</small></p>
-            : <p className="hero-n">{se.amount_state || '금액 없음'}</p>
-        ) : <Skeleton lines={2} head={false} />}
-        {se && <p className="hero-s">{plain}</p>}
-        {se && has && Number.isFinite(ratio) && (
-          <>
-            <div className="hero-bar" aria-hidden="true"><i style={{ width: `${ratio * 100}%` }} /><i style={{ width: `${(1 - ratio) * 100}%` }} /></div>
-            <div className="hero-who"><span>건물주 {Math.round(ratio * 100)}% <b className="num">{won(se.owner_won)}원</b></span><span>임차인 {Math.round((1 - ratio) * 100)}% <b className="num">{won(se.tenant_won)}원</b></span></div>
-          </>
+        <p className="hero-k">세입자가 매달 아끼는 돈 <Badge tone="amber" mark="sim">예상치</Badge></p>
+        {bn
+          ? <p className="hero-n num">{won(bn.tenant.monthly_won[0])}~{won(bn.tenant.monthly_won[1])}<small>원</small></p>
+          : <Skeleton lines={2} head={false} />}
+        {bn && (
+          <div className="hero-who">
+            <span>집 비우는 기간 <b className="num">{bn.schedule.vacate_days ? `약 ${bn.schedule.vacate_days}일` : '없음'}</b></span>
+            <span>건물주 <b className="num">{v.gain_won ? `가치 +${koMoney(v.gain_won[0])}~${koMoney(v.gain_won[1])}` : `가치 +${pctRange(...v.rate_range)}`}</b></span>
+          </div>
         )}
       </div>
       <div className="hero-go">
-        <h2>처음이라면 이 순서로 보세요</h2>
+        <h2>이 순서로 보세요</h2>
         <div className="hero-steps">
           {STEP4.map(([id, t, d], k) => <button key={id} type="button" onClick={() => go(id)}><i className="num">{k + 1}</i><b>{t}<span>{d}</span></b></button>)}
         </div>
         <div className="hero-a">
           <Button size="m" onClick={() => go('bld')}>차례대로 시작하기</Button>
-          <Button size="m" variant="gray" onClick={onSearch}><Icon name="search" size={16} />다른 건물</Button>
         </div>
       </div>
     </section>
@@ -324,7 +294,7 @@ function Home({ S, go, onSearch, tab, setTab, focus }) {
   }, [S.quarterKey]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="home" ref={box}>
-      <HomeHero S={S} go={go} onSearch={onSearch} />
+      <HomeHero S={S} go={go} />
       <button type="button" className="more-btn" aria-expanded={detail} onClick={() => setDetail(d => !d)}>
         {detail ? '자세한 결과 접기' : '자세한 결과 펼치기'}<Icon name={detail ? 'up' : 'down'} size={18} />
       </button>
@@ -380,7 +350,6 @@ function Category({ S, route, go, goPage, onSearch }) {
           ? <button type="button" className="p-prev" onClick={() => go(prev.id)}><Icon name="left" size={18} />{prev.name}</button>
           : <button type="button" className="p-prev" onClick={() => goPage('home')}><Icon name="left" size={18} />홈</button>}
         <span className="p-next-gap" />
-        {id === 'bld' && <Button variant="gray" size="m" onClick={onSearch}>다른 건물</Button>}
         <Button size="m" disabled={id === 'bld' && !S.bld.data} onClick={() => (next ? go(next.id) : goPage('home'))}>
           {id === 'bld' ? '맞아요' : next ? `다음 · ${next.name}` : '처음으로'}
         </Button>
@@ -453,10 +422,8 @@ function MonthPeek({ S, peek, q, onClose, onBig, bigLabel }) {
    보고 있는 분기·이상 달을 넣어 묻는다 · 서버가 알아듣는 질문 모양만 쓴다 */
 const TRUST_Q = '이 금액 믿어도 돼요?';
 function suggestFor(step, S, top) {
-  const per = S.settlement.data?.period;
   const odd = top && `${top.ym.slice(2, 4)}년 ${+top.ym.slice(4, 6)}월 ${top.fuel || '사용량'}${top.fuel ? '가' : '이'} 왜 튀었어?`;
   if (['prof', 'meas', 'base'].includes(step)) return [odd, TRUST_Q].filter(Boolean);
-  if (step === 'setl') return [per && `${String(per).replace(/^(\d{4})\s*/, '$1년 ')} 정산해도 돼?`, TRUST_Q, odd].filter(Boolean);
   if (step === 'sys') return [TRUST_Q];
   return chipsFor(step);
 }
@@ -477,67 +444,77 @@ function Suggest({ step, S, top, max = 3 }) {
   );
 }
 
-function AiPanel({ S, go, jump, setMonth, askAi, onHome, showReport, step, compact }) {
+/* ── 오른쪽 · 이득 요약 ── 왼쪽 화면은 그대로 (크게 보기를 눌러야만 이동) */
+function BenPeek({ S, onClose, onBig }) {
+  const jb = useJumpBack();
+  const d = S.benefit.data;
+  if (!d?.available) return null;
+  const v = d.owner.value;
+  return (
+    <section className="peek soft-in" aria-label="이득 요약">
+      <div className="peek-h">
+        <span className="ds-ai-k"><Icon name="sparkle" size={16} />AI 요약</span>
+        <button type="button" className="icon-btn" aria-label="요약 닫기" onClick={onClose}><Icon name="close" size={18} /></button>
+      </div>
+      <div className="peek-t"><b>누가 얼마나 이득일까요</b></div>
+      <div className="rows lined peek-rows">
+        <Row k="세입자" v={`매달 ${won(d.tenant.monthly_won[0])}~${won(d.tenant.monthly_won[1])}원`} strong />
+        <Row k="집 비우는 기간" v={d.schedule.vacate_days ? `약 ${d.schedule.vacate_days}일 · 관리비 할인` : '없음'} />
+        <Row k="건물주" v={v.gain_won ? `가치 +${koMoney(v.gain_won[0])}~${koMoney(v.gain_won[1])}` : `가치 +${pctRange(...v.rate_range)}`} />
+      </div>
+      <div className="peek-act">
+        {jb.on
+          ? <button type="button" className="main back" onClick={jb.back}><Icon name="left" size={16} />이전 화면</button>
+          : <button type="button" className="main" title="이득 확인 화면에서 크게 보기" onClick={() => { jb.mark(); onBig(); }}>크게 보기<Icon name="right" size={16} /></button>}
+        <button type="button" onClick={onClose}>닫기</button>
+      </div>
+    </section>
+  );
+}
+
+function AiPanel({ S, jump, step, compact }) {
   const assist = useAssist();
-  // 새싹: 답을 기다리면 생각 중 · 고른 분기가 '검증 완료'면 만세
-  const cheer0 = usePulse(S.settlement.data?.status_code === 'VERIFIED' ? S.quarterKey : null, 'cheer', 3200, true);
-  const cheer1 = usePulse(assist?.cheerKey || null, 'cheer');
-  const cheer = cheer1 || cheer0;
-  const [peek, setPeek] = useState(null);   // { key, ym } · 이 칸에서만 요약해 보여주는 달
+  const cheer = usePulse(assist?.cheerKey || null, 'cheer');
+  const [peek, setPeek] = useState(null);   // { ben: true } · { ym } — 이 칸에서만 요약해 보여준다
   const top = useMemo(() => (S.baseline.data?.anomalies || []).reduce((a, b) => (!a || b.ratio > a.ratio ? b : a), null), [S.baseline.data]);
   const id = S.bld.data?.bld_id;
   const ex = useResource(['ex', S.nonce, top?.ym ?? null], () => fetchExplain(id, top.ym), { enabled: !!top && id != null && S.nonce > 0 });
-  const qs = useQuarters(S);
-  const last = useMemo(() => {
-    let r = null;
-    (qs.data || []).forEach(q => (q.d?.months || []).forEach(m => { if (m.saving_won != null && (!r || m.ym > r.ym)) r = { key: q.key, ym: m.ym }; }));
-    return r;
-  }, [qs.data]);
-  const lex = useResource(['lex', S.nonce, last?.ym ?? null], () => fetchExplain(id, last.ym), { enabled: !!last && id != null && S.nonce > 0 });
-  const keys = new Set(S.caseItems.map(c => c.key));
-  // 고르면 이 칸에서 요약만 · 왼쪽 화면은 건드리지 않는다
-  const look = (key, ym) => { setPeek({ key, ym }); setOpen(true); };
+  const bn = S.benefit.data;
   // 대화가 시작되면 한 줄로 접는다 (줄을 누르면 다시 펼침)
   const [open, setOpen] = useState(true);
   useEffect(() => { setOpen(!compact); }, [compact]);
-  // 크게 보기 · 사용자가 누른 이동이라 이때만 왼쪽을 바꾼다
-  const big = ({ key, ym }) => {
-    if (!keys.has(key)) { jump('base'); return; }
-    if (onHome) { jump(null, () => { showReport(key, ym); askAi(); }); return; }   // 홈이면 그 자리에서 왼쪽 정산 리포트를 바꾼다
-    jump('setl', () => { S.setQuarterKey(key); setMonth(ym); askAi(); });
-  };
-  const bigLabel = p => (!keys.has(p.key) ? '원래 사용량 예측에서 크게 보기' : onHome ? '홈 리포트에서 크게 보기' : '정산 화면에서 크게 보기');
+  const look = p => { setPeek(p); setOpen(true); };
   return (
     <>
       {compact && (
         <button type="button" className={cx('ds-fold', open && 'open')} aria-expanded={open} onClick={() => setOpen(v => !v)}>
           <Icon name="sparkle" size={15} />
-          <span>AI 설명{peek ? ` · ${ymTxt(peek.ym)} 요약` : last ? ` · ${+last.ym.slice(4, 6)}월 분석` : ''}</span>
+          <span>AI 설명{peek?.ym ? ` · ${ymTxt(peek.ym)} 요약` : ' · 이득 요약'}</span>
           <Icon name="down" size={16} />
         </button>
       )}
-      {!open ? null : peek ? (
-        <MonthPeek S={S} peek={peek} q={(qs.data || []).find(x => x.key === peek.key)} onClose={() => setPeek(null)}
-          onBig={() => big(peek)} bigLabel={bigLabel(peek)} />
+      {!open ? null : peek?.ben ? (
+        <BenPeek S={S} onClose={() => setPeek(null)} onBig={() => jump('alloc')} />
+      ) : peek?.ym ? (
+        <MonthPeek S={S} peek={peek} q={null} onClose={() => setPeek(null)} onBig={() => jump('base')} bigLabel="원래 사용량 예측에서 크게 보기" />
       ) : (
         <>
-          {last && (
+          {bn?.available && (
             <div className="buddy">
-              <button type="button" className="buddy-pic" onClick={() => look(last.key, last.ym)} aria-label={`${ymTxt(last.ym)} 요약 보기`}>
+              <button type="button" className="buddy-pic" onClick={() => look({ ben: true })} aria-label="이득 요약 보기">
                 <BuddyBody w={72} live mood={assist?.busy ? 'think' : cheer || 'idle'} />
               </button>
               <div className="buddy-b">
                 <span className="ds-ai-k">세이빙 셰어 AI</span>
-                <b>{+last.ym.slice(0, 4)}년 {+last.ym.slice(4, 6)}월 분석이 나왔어요</b>
-                <p>{lex.data ? firstSentence(lex.data.text) : lex.status === 'error' ? '설명을 불러오지 못했어요' : <span className="tile-sk" />}</p>
+                <b>1년 요금 {manwon(bn.current.total_won)} 원 중 {manRange(...bn.saving.total_won)}을 줄일 수 있어요</b>
               </div>
               <div className="buddy-act one">
-                <button type="button" className="main" onClick={() => look(last.key, last.ym)}>{+last.ym.slice(4, 6)}월 요약 보기</button>
+                <button type="button" className="main" onClick={() => look({ ben: true })}>이득 요약 보기</button>
               </div>
             </div>
           )}
           {top && (
-            <button type="button" className="ds-ai" onClick={() => look(quarterOf(top.ym), top.ym)}>
+            <button type="button" className="ds-ai" onClick={() => look({ ym: top.ym })}>
               <span className="ds-ai-k"><Icon name="sparkle" size={16} />눈여겨볼 달 · {ymTxt(top.ym)}</span>
               <span className="ds-ai-v">
                 <span>{ex.data ? firstSentence(ex.data.text) : ex.status === 'error' ? '설명을 불러오지 못했어요' : <span className="tile-sk" />}</span>
@@ -570,7 +547,6 @@ function BldPanel({ S, onSearch }) {
             <Row k="출처" v={b.data_origin ? <Badge tone={b.data_origin.is_simulated ? 'purple' : 'green'}>{b.data_origin.label}</Badge> : '출처 미표시'} />
             {span && <Row k="결측월" v={span.miss.length ? span.miss.map(ymTxt).join(' · ') : '없음'} />}
           </div>
-          <Button variant="gray" block onClick={onSearch}>다른 건물 찾기</Button>
         </div>
       )}
     </>
@@ -613,15 +589,14 @@ function Rail({ side, setSide, onSettings }) {
 }
 
 /* ── 아래 유의사항 줄 ── */
-function Ticker({ S, onNotes }) {
-  const al = S.allocation.data, ba = S.baseline.data;
+function Ticker({ S }) {
+  const bn = S.benefit.data?.available ? S.benefit.data : null, ba = S.baseline.data;
   const m = ba?.metrics || {}, mc = ba?.metric_checks || {};
   const ok = k => (mc[k]?.ok ? <em className="green">기준 충족</em> : mc[k]?.ok === false ? <em className="amber">범위 제시</em> : null);
   return (
     <footer className="d-ticker">
-      <button type="button" onClick={onNotes}>예상 금액 유의사항</button>
-      {al && <span className="tk"><span>연간 절감액</span><b className="num">{won(al.annual_saving_won)}원</b>{ba?.saving_basis?.actual_based ? <em className="blue">공사 후 실측</em> : <em className="amber">예상 금액</em>}</span>}
-      {al && Number.isFinite(al.payback_years) && <span className="tk"><span>공사비 회수</span><b className="num">{al.payback_years}년</b></span>}
+      {bn && <span className="tk"><span>세입자 매달</span><b className="num">{won(bn.tenant.monthly_won[0])}~{won(bn.tenant.monthly_won[1])}원</b><em className="amber">예상치</em></span>}
+      {bn && <span className="tk"><span>공사 일정</span><b className="num">{bn.schedule.total_days}일{bn.schedule.vacate_days ? ` · 비움 ${bn.schedule.vacate_days}일` : ''}</b></span>}
       {ba && <span className="tk"><span>예측이 빗나간 정도</span><b className="num">{m.cv_rmse}%</b>{ok('cv_rmse')}</span>}
       {ba && <span className="tk"><span>예측이 맞는 정도</span><b className="num">{m.r2}</b>{ok('r2')}</span>}
     </footer>
@@ -715,7 +690,7 @@ function PcTip({ onOpen }) {
     <div className="ai-tip pc" role="status" style={{ top }}>
       <button type="button" className="ai-tip-main" onClick={() => { close(); onOpen(); }}>
         <BuddyFace size={44} live />
-        <span className="ai-tip-b"><b>세이빙 AI에게 물어보세요</b><span>"건물주 몫 몇 %가 좋아?"처럼 물으면 화면의 숫자로 답해 드려요</span></span>
+        <span className="ai-tip-b"><b>세이빙 AI에게 물어보세요</b><span>"이 금액 믿어도 돼요?"처럼 물어보세요</span></span>
       </button>
       <button type="button" className="ai-tip-x" aria-label="닫기" onClick={close}><Icon name="close" size={16} /></button>
     </div>
@@ -751,7 +726,7 @@ export function DesktopApp({ S }) {
   const closeSide = () => { setSide(null); a?.setOpen(false); };
   const [sheet, setSheet] = useState(null);
   const [month, setMonth] = useState(null);
-  const [htab, setHtab] = usePersistent('ss.v4.htab', 'setl', v => (HOME_TABS.some(t => t.id === v) ? v : 'setl'));
+  const [htab, setHtab] = usePersistent('ss.v4.htab', 'alloc', v => (HOME_TABS.some(t => t.id === v) ? v : 'alloc'));
   const [focus, setFocus] = useState(null);   // 오른쪽에서 고른 달 → 왼쪽 정산 리포트가 그 행으로 스크롤
   const showReport = (key, ym) => { S.setQuarterKey(key); setMonth(ym); setHtab('setl'); setFocus({ ym, n: Date.now() }); };
   const [aiReq, setAiReq] = useState(0);
@@ -793,21 +768,12 @@ export function DesktopApp({ S }) {
   // 세이빙 AI 가 화면을 옮길 때 · 오른쪽 대화는 그대로 두고 판만 바꾼다 (이동 버튼을 누른 것만 · 돌아가기 가능)
   useEffect(() => { a?.bindNav(goStep, route.step || route.page, false, true); a?.bindBack(hist.length, goBack); }); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    const k = e => {
-      const t = e.target;
-      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-      if (e.key === '/' && !typing && !sheet) { e.preventDefault(); setSheet('search'); }
-    };
-    window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
-  }, [sheet]);
 
   return (
     <ShellProvider value={{ device: 'pc', month, setMonth, go: goStep, aiReq, focus }}>
       <div className={cx('pc d-shell', !side && 'closed')}>
         <div className="d-main">
-          <Nav page={route.page} goPage={goPage} onSearch={() => setSheet('search')} onNotice={() => setSheet('basis')} />
+          <Nav goPage={goPage} />
           <div className="d-page">
             <section className="panel" aria-label={route.page === 'home' ? '홈' : undefined}>
               <PanelStatus S={S} onAbout={() => setSheet('calc')} lead={<>{back && (
@@ -824,14 +790,14 @@ export function DesktopApp({ S }) {
                 : <Category S={S} route={route} go={goStep} goPage={goPage} onSearch={() => setSheet('search')} />}
             </section>
           </div>
-          {route.page !== 'home' && <Ticker S={S} onNotes={() => setSheet('notes')} />}
+          {route.page !== 'home' && <Ticker S={S} />}
         </div>
         {side && <Splitter w={sideW} setW={setSideW} />}
         {side === 'ai' ? (
           /* 세이빙 AI 한 칸 · 위: AI 설명(대화가 시작되면 한 줄로 접힘) · 아래: 대화 */
           <aside className="d-side chat" aria-label="세이빙 AI" style={sideW ? { width: sideW } : undefined}>
             <Assistant S={S} variant="panel" step={route.step || (route.page === 'home' ? 'bld' : route.page)} onClose={closeSide} noHello
-              top={<AiPanel S={S} go={goStep} jump={jump} setMonth={setMonth} askAi={askAi} onHome={route.page === 'home'} showReport={showReport}
+              top={<AiPanel S={S} jump={jump}
                 compact={(a?.msgs.length || 0) > 0}
                 step={route.step || (route.page === 'home' ? 'bld' : GROUPS.find(g => g.id === route.page)?.steps[0])} />} />
           </aside>
@@ -842,10 +808,8 @@ export function DesktopApp({ S }) {
         )}
         <Rail side={side} setSide={setSide} onSettings={() => setSheet('settings')} />
         <PcTip onOpen={() => a?.setOpen(true)} />
-        <BasisSheet open={sheet === 'basis'} onClose={() => setSheet(null)} S={S} />
         <SettingsSheet open={sheet === 'settings'} onClose={() => setSheet(null)} />
         <Sheet open={sheet === 'calc'} onClose={() => setSheet(null)} title="계산 방법" wide><CalcMethod /></Sheet>
-        <NotesSheet open={sheet === 'notes'} onClose={() => setSheet(null)} S={S} />
         <SearchSheet open={sheet === 'search'} onClose={() => setSheet(null)} S={S} onFound={() => goStep('bld')} />
       </div>
     </ShellProvider>

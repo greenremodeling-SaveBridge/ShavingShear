@@ -34,12 +34,12 @@ router = APIRouter()
 
 TAG = {"mediate": "🤝 합의 도우미", "resolve": "🏢 건물 찾기", "analyze": "🔎 변동 분석", "trust": "🛡 신뢰 확인", "clarify": "",
        "carbon": "🌱 온실가스", "measures": "🛠 개선 대책", "support": "📋 지원사업", "scope": "🏛 적용 대상", "rent": "🤝 합의 도우미", "settle": "🧾 정산 판단"}
-SIM_NOTE = "공사 전 시뮬레이션이에요. 실제로 아낀 금액이 아니에요"
+SIM_NOTE = "공사 전 예상치예요"
 POST_NOTE = "공사 후 실측 사용량과 기저선의 차이로 계산한 연간 절감액이에요"
 
 
 def money_note(bld_id):
-    """이 건물의 금액이 공사 전 시뮬레이션인지, 공사 후 실측 기반인지 (가상 데이터면 그것도)"""
+    """이 건물의 금액이 공사 전 예상치인지, 공사 후 실측 기반인지 (가상 데이터면 그것도)"""
     sb = M.baseline_of(bld_id).get("saving_basis") or {}
     o = M.data_origin(bld_id)
     n = [POST_NOTE if sb.get("actual_based") else SIM_NOTE]
@@ -387,7 +387,7 @@ def trust_calc(bld_id, quarter, ratio):
             code = None
     fail = not (mc["cv_rmse"]["ok"] and mc["r2"]["ok"])
     if code in (None, "ESTIMATED"):
-        reply = "솔직히 말씀드리면 아직은 시뮬레이션이에요. 공사 전이라 실제로 아낀 양이 없어요."
+        reply = "솔직히 말씀드리면 아직은 예상치예요. 공사 전이라 실제로 아낀 양이 없어요."
     elif code == "PROVISIONAL":
         reply = "이 분기 금액은 잠정이에요. 근거가 조금 부족한 달이 있어서 연 단위로 다시 확인해요."
     elif code == "REVIEW_REQUIRED":
@@ -525,7 +525,7 @@ def settle_answer(bld_id, t, ctx, src, assumed, sim_note):
         if data_sim := M.data_origin(bld_id)["is_simulated"]:
             pre_work += " (이 건물은 가상 공사 시연 데이터예요.)"
     else:
-        pre_work = "공사 전이라 실제 정산이 아니라 시뮬레이션이고, 공사 후 실측이 들어와야 확정돼요."
+        pre_work = "공사 전이라 실제 정산이 아니라 예상치이고, 공사 후 실측이 들어와야 확정돼요."
     split = (f"합의한 비율로 나누면 건물주 {won(d['owner_won'])}원, 세입자 {won(d['tenant_won'])}원이에요."
              if d.get("saving_won") else "")
 
@@ -610,9 +610,9 @@ def topic_answer(t, s, ctx, src):
                     f"개선 대책 {len(m['measures'])}가지를 모두 적용하면 1년에 {won(sl)}~{won(sh)} kWh"
                     f"(사용량의 {round(rl * 100)}~{round(rh * 100)}%)를 줄이고, "
                     f"온실가스는 1년에 약 {tons(lo)}~{tons(hi)}톤 줄어드는 걸로 추정돼요. "
-                    "대책별 절감률은 시나리오 가정값이라 한 숫자가 아니라 범위로 보여드려요.",
+                    "대책별 절감률은 가정값이라 한 숫자가 아니라 범위로 보여드려요.",
                     facts=[{"label": "온실가스 감축 (연)", "value": round(lo / 1000, 1), "unit": f"~ {hi / 1000:.1f} tCO₂eq", "kind": "simulated", "goto": "meas"}],
-                    notices=["대책별 절감률은 시나리오 가정값이에요", "배출계수: 전력 0.4173(2023년 국가 고유값) · 가스 0.2020(IPCC 2006) kgCO₂eq/kWh"] + sim_note,
+                    notices=["대책별 절감률은 가정값이에요", "배출계수: 전력 0.4173(2023년 국가 고유값) · 가스 0.2020(IPCC 2006) kgCO₂eq/kWh"] + sim_note,
                     chips=[CH_X["measure"], CH["deal"]], source=src, **assumed)
 
     # 📋 지원사업
@@ -645,7 +645,7 @@ def topic_answer(t, s, ctx, src):
                     f"줄일 수 있는 양이 큰 순서로 {order}예요. "
                     "다만 지금 단열·창호 상태는 사용량 데이터만으로 알 수 없어서, 공사 전에 현장 확인이 먼저예요.",
                     facts=[{"label": "모두 적용 시 절감", "value": round(m["total_saving_rate"][0] * 100), "unit": f"~ {round(m['total_saving_rate'][1] * 100)}%", "kind": "simulated", "goto": "meas"}],
-                    notices=["대책별 절감률은 시나리오 가정값이에요"] + sim_note,
+                    notices=["대책별 절감률은 가정값이에요"] + sim_note,
                     chips=[CH_X["carbon"], CH["deal"]], source=src, **assumed)
 
     # 🤝 월세

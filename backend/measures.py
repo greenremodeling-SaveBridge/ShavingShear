@@ -360,7 +360,7 @@ def apply_measures(years, selected=None, catalog=None, prices=None):
             "co2_kg_high": round(hi * ef["value"]),
             "basis": m["basis"],
             "basis_label": {"measured": "실측", "reference": "문헌 확인값",
-                            "assumed": "시나리오 가정값"}[m["basis"]],
+                            "assumed": "가정값"}[m["basis"]],
             "source": m["source"] or None,
             "source_missing": not m["source"],
             "needs_survey": m["needs_survey"],

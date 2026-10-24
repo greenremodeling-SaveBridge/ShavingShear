@@ -5,11 +5,11 @@
    숫자와 문장은 전부 서버 응답에서 온다.
    ══════════════════════════════════════════════════════════════ */
 import { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
-import { cx, won, kwh, pct, pct1, ymTxt, periodTxt, dateTxt, koMoney } from '../core/format.js';
+import { cx, won, kwh, pct, pct1, ymTxt, periodTxt, dateTxt, koMoney, manwon, manRange } from '../core/format.js';
 import { hasAmount, explainTarget, fetchExplain } from '../core/domain.js';
 import { useResource } from '../core/hooks.js';
 import { BACKUP_INVEST, BACKUP_YEARS } from '../core/client.js';
-import { BUILD, INVEST, YEARS, RATIO } from '../core/useSavingShare.js';
+import { INVEST, PROPERTY, YEARS, RATIO } from '../core/useSavingShare.js';
 import {
   ActionBadge, AmountField, Badge, Button, Check, Chips, ErrorBox, Fold, Icon, Info, Note, Num, Res, Row, Sheet,
   Skeleton, StatusBadge, Stepper, Switch, errorHead, monthBadge, BuddyFace, BuddyBody } from './ui.jsx';
@@ -25,16 +25,15 @@ export const STEPS = [
   { id: 'prof', n: 3, name: '건물 현황' },
   { id: 'meas', n: 4, name: '추천 공사' },
   { id: 'base', n: 5, name: '원래 사용량 예측' },
-  { id: 'alloc', n: 6, name: '이익 나누기' },
-  { id: 'setl', n: 7, name: '월별 절약 결과' },
-  { id: 'draft', n: 8, name: '계약서 문구' },
-  { id: 'sys', n: 9, name: '결론 정리' },
+  { id: 'alloc', n: 6, name: '이득 확인' },
+  { id: 'draft', n: 7, name: '계약서 문구' },
+  { id: 'sys', n: 8, name: '결론 정리' },
 ];
 export const GROUPS = [
   { id: 'bld', name: '건물', steps: ['bld', 'elig'] },
   { id: 'diag', name: '진단', steps: ['prof', 'meas', 'base'] },
-  { id: 'alloc', name: '분배', steps: ['alloc'] },
-  { id: 'setl', name: '정산', steps: ['setl', 'draft'] },
+  { id: 'alloc', name: '이득', steps: ['alloc'] },
+  { id: 'setl', name: '계약', steps: ['draft'] },
   { id: 'sys', name: '결론', steps: ['sys'] },
 ];
 export const stepIndex = id => STEPS.findIndex(s => s.id === id);
@@ -182,6 +181,9 @@ function ProfView({ S }) {
   const un = d.unverified || [];
   return (
     <StepLayout title={last ? `${last.year}년에 ${kwh(last.total)} kWh를 썼어요` : '연도별 사용량'}
+      meta={S.benefit.data?.available && (
+        <span className="prof-cost num">1년 요금 약 {manwon(S.benefit.data.current.total_won)} 원 · 전기 {manwon(S.benefit.data.current.elec_won)} · 가스 {manwon(S.benefit.data.current.gas_won)}</span>
+      )}
       main={
         <>
           <YearBars years={ys} />
@@ -220,27 +222,31 @@ function Warn({ list }) {
 
 /* 공사별 세입자 영향 · 계산값이 아닌 일반 안내 (현장마다 다름) */
 const TENANT_IMPACT = {
-  window: { stay: '나가지 않아도 돼요 · 구역을 나눠 진행', noise: '보통 · 창틀 뜯을 때', time: '구역마다 짧게', note: '교체하는 동안 그 구역은 냉난방이 안 돼요' },
-  envelope: { stay: '나가지 않아도 돼요 · 바깥 비계 작업', noise: '보통~많음 · 바깥 소음·분진', time: '긴 편 (건물 전체를 둘러서)', note: '비계·가림막이 간판과 출입구를 가릴 수 있어요' },
-  boiler: { stay: '나가지 않아도 돼요 · 영업 끝난 뒤 가능', noise: '적음', time: '짧음 (기기만 교체)', note: '바꾸는 날은 난방·온수가 잠깐 멈춰요' },
-  led: { stay: '나가지 않아도 돼요 · 영업 끝난 뒤 가능', noise: '적음', time: '짧음 (기기만 교체)', note: '천장 작업하는 자리만 잠깐 비워 주면 돼요' },
+  window: { stay: '나가지 않아도 돼요 · 방을 나눠 진행', noise: '보통 · 창틀 뜯을 때', note: '교체하는 동안 그 방은 냉난방이 안 돼요' },
+  envelope: { stay: '나가지 않아도 돼요 · 바깥 비계 작업', noise: '보통~많음 · 소음·분진', note: '비계·가림막이 창과 출입구를 가릴 수 있어요' },
+  boiler: { stay: '나가지 않아도 돼요 · 하루면 끝나요', noise: '적음', note: '바꾸는 날은 난방·온수가 잠깐 멈춰요' },
+  led: { stay: '나가지 않아도 돼요 · 하루면 끝나요', noise: '적음', note: '천장 작업하는 자리만 잠깐 비워 주면 돼요' },
+  solar: { stay: '나가지 않아도 돼요 · 지붕 작업', noise: '보통 · 설치하는 날', note: '지붕 방향·그늘에 따라 발전량이 달라져요' },
 };
-function Impact({ id }) {
-  const t = TENANT_IMPACT[id];
+/* m: 서버가 준 대책 한 줄 (공사 기간·집 비우는 기간은 서버 값) */
+function Impact({ m }) {
+  const t = TENANT_IMPACT[m.id];
   if (!t) return null;
   return (
     <div className="imp">
       <p className="imp-h">세입자에게는</p>
       <dl>
-        <div><dt>영업 중 공사</dt><dd>{t.stay}</dd></div>
+        <div><dt>사는 채로 공사</dt><dd>{m.vacate_days ? `집을 비워야 해요 · 약 ${m.vacate_days}일` : t.stay}</dd></div>
         <div><dt>소음·분진</dt><dd>{t.noise}</dd></div>
-        <div><dt>공사 기간</dt><dd>{t.time}</dd></div>
+        <div><dt>공사 기간</dt><dd>{m.days ? `약 ${m.days}일` : '—'}</dd></div>
         <div><dt>주의</dt><dd>{t.note}</dd></div>
       </dl>
       <p className="imp-s">일반적인 경우예요 · 현장마다 달라요</p>
     </div>
   );
 }
+
+const priceOpen = p => Object.values(p || {}).some(x => x && x.verified === false);
 
 function MeasView({ S }) {
   const r = S.measures;
@@ -256,12 +262,12 @@ function MeasView({ S }) {
   const [nlo, nhi] = d.naive_sum_kwh;
   const [olo, ohi] = d.overlap_adjust_kwh;
   const [clo, chi] = d.total_co2_kg;
-  const labels = [...new Set(list.map(m => m.basis_label || '시나리오 가정값'))];
+  const labels = [...new Set(list.map(m => m.basis_label || '가정값'))];
   const missAll = list.every(m => m.source_missing);
   const uniform = labels.length === 1 && (missAll || list.every(m => !m.source_missing));
   const efOpen = Object.values(d.emission_factors || {}).some(f => f && f.verified === false);
   return (
-    <StepLayout eyebrow={<Badge tone="gray" lg>가정으로 계산한 값</Badge>}
+    <StepLayout eyebrow={<Badge tone="amber" lg mark="sim">예상치</Badge>}
       title={rlo != null ? `에너지 사용량을 ${pctRange(rlo, rhi)} 줄일 수 있어요` : `연 ${kwh(klo)}~${kwh(khi)} kWh를 줄일 수 있어요`}
       main={
         <div className={cx('stack-16', r.stale && 'stale')}>
@@ -286,13 +292,17 @@ function MeasView({ S }) {
                         <Info label={`${m.name} 자세히`}>
                           <p>{tidy(m.addresses)}{rr.length === 2 ? ` · 절감률 ${pctRange(rr[0], rr[1])}` : ''}</p>
                           {m.survey_note && <p>{tidy(m.survey_note)}</p>}
-                          <Impact id={m.id} />
+                          <Impact m={m} />
                         </Info>
                       </span>
-                      <span className="ms-v num">연 {kwh(m.saving_kwh_low)}~{kwh(m.saving_kwh_high)} kWh</span>
+                      <span className="ms-v num">
+                        연 {kwh(m.saving_kwh_low)}~{kwh(m.saving_kwh_high)} kWh
+                        {m.saving_won_low != null && <b className="ms-won"> · {manRange(m.saving_won_low, m.saving_won_high)}</b>}
+                        {m.days != null && <span className="ms-sch"> · 공사 {m.days}일{m.vacate_days ? ` · 집 비우기 ${m.vacate_days}일` : ''}</span>}
+                      </span>
                       {!uniform && (
                         <span className="badges">
-                          <Badge>{m.basis_label || '시나리오 가정값'}</Badge>
+                          <Badge>{m.basis_label || '가정값'}</Badge>
                           {m.source_missing && <Badge tone="red">출처 확인 중</Badge>}
                         </span>
                       )}
@@ -311,12 +321,12 @@ function MeasView({ S }) {
           <Row k="대책별 단순 합" v={`${kwh(nlo)}~${kwh(nhi)} kWh`} />
           <Row k={<>겹치는 만큼 빼기{d.method && <Info>{tidy(d.method)}</Info>}</>} v={`${kwh(olo)}~${kwh(ohi)} kWh`} />
           <Row k="절감 합계" v={`${kwh(klo)}~${kwh(khi)} kWh`} strong />
+          {d.total_saving_won && <Row k={<>1년에 아끼는 돈{priceOpen(d.prices) && <Info>주택용 단가는 출처를 확인하는 중이에요</Info>}</>}
+            v={manRange(...d.total_saving_won)} strong />}
+          {d.schedule && <Row k={<>공사 일정<Info>{tidy(d.schedule.note)}</Info></>}
+            v={`약 ${d.schedule.total_days}일${d.schedule.vacate_days ? ` · 집 비우기 ${d.schedule.vacate_days}일` : ''}`} />}
           <Row k={<>온실가스 감축{efOpen && <Info>배출계수를 아직 확인하지 않아 추정값이에요</Info>}</>}
-            v={<span className="v-tag">{tco2(clo)}~{tco2(chi)} tCO₂e{efOpen && <Badge>가정으로 계산한 값</Badge>}</span>} />
-          <div className="ms-build">
-            <Stepper label="공사 기간" info={<Info>가정값이에요. 실제 견적·일정에 맞춰 바꾸세요. 계약서 제1조에 들어가요</Info>}
-              value={S.buildMonths} min={BUILD.min} max={BUILD.max} unit="개월" onChange={S.setBuildMonths} />
-          </div>
+            v={<span className="v-tag">{tco2(clo)}~{tco2(chi)} tCO₂e{efOpen && <Badge>예상치</Badge>}</span>} />
         </div>
       } />
   );
@@ -400,7 +410,7 @@ export function BasisRows({ sb }) {
   );
 }
 
-/* ══ ⑥ 분배 시뮬레이터 ══ */
+/* ══ ⑥ 분배 (예전 화면 · 지금은 이득 확인으로 바뀜) ══ */
 function ConditionSheet({ open, onClose, S }) {
   const [inv, setInv] = useState(S.invest);
   const [yrs, setYrs] = useState(S.years);
@@ -744,43 +754,96 @@ function SetlView({ S }) {
   );
 }
 
+/* ══ ⑥ 이득 확인 (2026-10-24 회의) ══
+   세입자: 줄어든 전기·가스 요금 그대로 · 집 비우는 기간: 관리비 할인(금액은 두 사람이 정함)
+   건물주: 절감액을 나눠 갖지 않고, 건물 가치 상승 + 이자지원. 금액은 서버(/api/benefit) 값 그대로 */
+function BenefitView({ S }) {
+  const r = S.benefit;
+  if (!r.data) return <StepPending r={r} />;
+  const d = r.data;
+  if (!d.available) return <StepLayout title="이득을 계산할 수 없어요" main={d.reason ? <p className="t-b">{tidy(d.reason)}</p> : null} />;
+  const { tenant: t, saving: sv, current: cur, schedule: sch, owner: ow } = d;
+  const v = ow.value;
+  const [mlo, mhi] = t.monthly_won;
+  const vac = sch.vacate_days;
+  const vacWorks = sch.works.filter(w => w.vacate_days);
+  return (
+    <StepLayout eyebrow={<Badge tone="amber" lg mark="sim">예상치</Badge>}
+      title={`세입자는 매달 ${won(mlo)}~${won(mhi)}원을 아끼고, 건물주는 건물 가치가 올라요`}
+      main={
+        <div className={cx('ben', r.stale && 'stale')}>
+          <section className="ben-c tenant" aria-label="세입자 이득">
+            <h3>세입자 이득</h3>
+            <p className="ben-big num">매달 {won(mlo)}~{won(mhi)}원</p>
+            <div className="rows lined">
+              <Row k="지금 1년 요금" v={`${manwon(cur.total_won)} 원`} sub={`${d.base_year}년 사용량 × 단가 · 전기 ${won(cur.elec_won)}원 · 가스 ${won(cur.gas_won)}원`} />
+              <Row k="줄어드는 전기" v={`연 ${manRange(...sv.elec_won)}`} />
+              <Row k="줄어드는 가스" v={`연 ${manRange(...sv.gas_won)}`} />
+            </div>
+            <p className="ben-note">{t.note}</p>
+          </section>
+          <section className="ben-c vacate" aria-label="집 비우는 기간">
+            <h3>집 비우는 기간</h3>
+            <p className="ben-big num">{vac ? `약 ${vac}일` : '없어요'}</p>
+            <div className="rows lined">
+              {vacWorks.map(w => <Row key={w.id} k={w.name} v={`약 ${w.vacate_days}일`} />)}
+              <Row k="전체 공사 일정" v={`약 ${sch.total_days}일`} sub={sch.note} />
+              {vac > 0 && <Row k="보상" v="관리비 할인" />}
+            </div>
+            <p className="ben-note">{d.compensation.note}</p>
+          </section>
+          <section className="ben-c owner" aria-label="건물주 이득">
+            <h3>건물주 이득</h3>
+            <p className="ben-big num">
+              {v.gain_won ? `건물 가치 +${koMoney(v.gain_won[0])}~${koMoney(v.gain_won[1])}` : `건물 가치 +${pctRange(...v.rate_range)}`}
+            </p>
+            <div className="ben-prop">
+              <AmountField label="집값(시세)" value={S.property} min={PROPERTY.min} max={PROPERTY.max}
+                onChange={x => { if (x != null && x !== S.property) S.setProperty(x); }} />
+            </div>
+            <div className="rows lined">
+              <Row k={<>상승률{!v.verified && <Badge tone="red">출처 확인 중</Badge>}</>} v={pctRange(...v.rate_range)} sub={`${v.source} · ${v.note}`} />
+              <Row k="공사비" v={`${koMoney(S.invest)} · 건물주 부담`} />
+              <Row k="지원사업" v={ow.programs.length ? ow.programs.join(' · ') : '해당 없음'} />
+            </div>
+            <p className="ben-note">{ow.note}</p>
+          </section>
+        </div>
+      } />
+  );
+}
+
 /* ══ ⑧ 임대차 특약 ══
    가상 계약서 한 장. 1~7단계에서 정한 값은 형광펜(h) · i 를 누르면 어느 단계에서 왜 이 값인지.
    화면과 복사 글이 같은 문안에서 나온다 (draftDoc) */
 const h = (v, n, why) => ({ v, n, why });
 const partText = ps => ps.map(p => (typeof p === 'string' ? p : p.v)).join('');
 function draftDoc(S) {
-  const b = S.bld.data || {}, el = S.eligibility.data, me = S.measures.data, ba = S.baseline.data, al = S.allocation.data, se = S.settlement.data;
+  const b = S.bld.data || {}, el = S.eligibility.data, me = S.measures.data, ba = S.baseline.data, bn = S.benefit.data;
   const list = S.measureList || me?.measures || [];
   const on = list.filter(m => (S.picked ?? list.map(x => x.id)).includes(m.id)).map(m => m.name);
-  const [rlo, rhi] = me?.total_saving_rate || [];
   const m = ba?.metrics || {}, mc = ba?.metric_checks || {};
-  const fail = ba ? baselineFail(ba) : false;
-  const odd = ba?.anomalies || [];
-  const top = odd.length ? odd.reduce((a, c) => (c.ratio > a.ratio ? c : a)) : null;
-  const pr = se?.saving_basis?.prices || {};
-  const has = se && hasAmount(se);
+  const ok = bn?.available;
+  const sch = ok ? bn.schedule : null;
+  const pr = ok ? bn.prices : {};
+  const vac = sch?.vacate_days || 0;
+  const v = ok ? bn.owner.value : null;
   // 형광펜 값 · 한 번 만들어 핵심 줄과 원문에 같이 쓴다
   const H = {
     addr: h(b.addr || '○○', 1, '1단계 「건물 확인」에서 맞다고 확인한 건축물대장 주소예요.'),
-    area: b.area ? h(`${Number(b.area).toLocaleString('ko-KR')}㎡`, 1, '건축물대장의 연면적이에요. 지원사업 요건과 사용량 비교에 쓰여요.') : null,
+    area: b.area ? h(`${Number(b.area).toLocaleString('ko-KR')}㎡`, 1, '건축물대장의 연면적이에요.') : null,
     work: h(on.length ? on.join(', ') : '추천 공사', 4, '4단계 「추천 공사」에서 켜 둔 공사예요. 스위치로 끈 공사는 여기서 빠져요.'),
-    months: h(`약 ${S.buildMonths}개월`, 4, '4단계 「추천 공사」에서 잡은 공사 기간이에요. 가정값이라 실제 견적·일정에 맞춰 바꾸세요.'),
-    rate: h(rlo != null ? pctRange(rlo, rhi) : '—', 4, '고른 공사의 절감량을 더한 뒤 서로 겹치는 만큼 뺀 예상값이에요. 실제 금액은 아니에요.'),
-    invest: h(koMoney(S.invest), 6, '6단계 「이익 나누기」에서 넣은 공사비예요. 회수 기간 계산의 기준이 돼요.'),
+    days: h(sch ? `약 ${sch.total_days}일` : '—', 4, sch ? `4단계에서 고른 공사를 차례로 한다고 보고 더한 일정이에요. ${sch.note}` : '4단계에서 계산해요.'),
+    vac: h(vac ? `약 ${vac}일` : '없음', 4, vac ? `집을 비워야 하는 공사(${sch.works.filter(w => w.vacate_days).map(w => w.name).join(', ')})의 기간이에요. 가정값이에요.` : '고른 공사 중 집을 비우는 공사가 없어요.'),
+    monthly: h(ok ? `${won(bn.tenant.monthly_won[0])}~${won(bn.tenant.monthly_won[1])}원` : '—', 6, '6단계 「이득 확인」의 예상 절감액이에요. 고른 공사의 절감량 × 주택용 단가로 계산했어요.'),
+    pe: h(pr.elec ? `${pr.elec.won_per_kwh}원/kWh` : '—', 6, pr.elec ? `${pr.elec.source}${pr.elec.verified === false ? ' · 출처 확인 중' : ''}` : '단가'),
+    pg: h(pr.gas ? `${pr.gas.won_per_kwh}원/kWh` : '—', 6, pr.gas ? `${pr.gas.source}${pr.gas.verified === false ? ' · 출처 확인 중' : ''}` : '단가'),
+    invest: h(koMoney(S.invest), 6, '6단계 「이득 확인」의 공사비예요. 맨 위 조건에서 바꿀 수 있어요.'),
     prog: h(el?.programs?.length ? el.programs.join(' · ') : '지원사업', 2, el?.msg ? `2단계 「지원 대상 확인」 결과예요: ${el.msg}` : '2단계 「지원 대상 확인」 결과예요.'),
+    value: h(v ? (v.gain_won ? `${koMoney(v.gain_won[0])}~${koMoney(v.gain_won[1])}` : pctRange(...v.rate_range)) : '—', 6,
+      v ? `집값(시세) × 상승률 ${pctRange(...v.rate_range)} 이에요. ${v.source}${v.verified ? '' : ' · 출처 확인 중'}` : '6단계에서 계산해요.'),
     cv: h(m.cv_rmse != null ? `${m.cv_rmse}%` : '—', 5, `5단계 「원래 사용량 예측」의 예측이 빗나간 정도예요. ${mc.cv_rmse?.ok ? '기준(15% 이하)을 충족해요.' : '기준(15% 이하)을 넘어요.'}`),
     r2: h(m.r2 ?? '—', 5, `예측이 들어맞는 정도예요. ${mc.r2?.ok ? '기준(0.75 이상)을 충족해요.' : '기준(0.75 이상)에 못 미쳐서 금액을 범위로 보여줘요.'}`),
-    pe: h(pr.elec ? `${pr.elec.won_per_kwh}원/kWh` : '—', 7, pr.elec?.source ? `7단계 정산에 쓴 단가예요. ${pr.elec.source}` : '7단계 정산에 쓴 단가예요.'),
-    pg: h(pr.gas ? `${pr.gas.won_per_kwh}원/kWh` : '—', 7, pr.gas?.source ? `7단계 정산에 쓴 단가예요. ${pr.gas.source}` : '7단계 정산에 쓴 단가예요.'),
-    own: h(pct1(S.ratio), 6, `6단계 「이익 나누기」에서 정한 건물주 몫이에요.${al?.required_owner_ratio != null ? ` 공사비를 돌려받으려면 최소 ${pct1(al.required_owner_ratio)}가 필요해요.` : ''}`),
-    ten: h(pct1(1 - S.ratio), 6, '건물주 몫을 뺀 나머지예요. 임차인은 이만큼 요금을 덜 내요.'),
-    years: h(`${S.years}년`, 6, `6단계에서 정한 분배 기간이에요.${al?.feasibility_msg ? ` ${al.feasibility_msg}` : ''}`),
-    pay: al?.payback_years != null ? h(`${al.payback_years}년`, 6, `예상 연 절감액 ${won(al.annual_saving_won)}원 중 건물주 몫으로 공사비를 돌려받는 데 걸리는 기간이에요. 예상 금액이에요.`) : null,
-    verdict: h(fail ? '범위로 제시' : '확정', 5, fail ? '지금 예측은 기준을 모두 채우지 못해서, 금액을 한 숫자로 정하지 않고 범위로 보여줘요.' : '지금 예측은 기준을 모두 채워요.'),
-    odd: top ? h(`${ymTxt(odd[0].ym)}~${ymTxt(odd[odd.length - 1].ym)} 중 ${odd.length}개월`, 3, `3단계 「건물 현황」·5단계에서 과거 같은 달 평균보다 크게 튄 달이에요. 가장 큰 달은 ${ymTxt(top.ym)}(${top.ratio}배)예요.`) : null,
-    period: h(se?.period || '해당 분기', 7, '7단계 「월별 절약 결과」에서 고른 분기예요.'),
-    amt: h(has ? `${won(se.saving_won)}원` : (se?.amount_state || '금액 없음'), 7, se?.status_desc ? `${se.status_desc}.` : '7단계에서 계산한 분기 금액이에요.'),
   };
   const meta = [
     ['대상 건물', [H.addr, ...(H.area ? [' · 연면적 ', H.area] : [])]],
@@ -789,33 +852,28 @@ function draftDoc(S) {
   ];
   /* 조항마다 keys(화면에 보이는 핵심 줄) · full(원문 · 복사) */
   const cl = [
-    { k: '공사와 지원',
-      keys: [['공사', [H.work]], ['공사 기간', [H.months]], ['예상 절감률', [H.rate]], ['공사비', [H.invest, ' · 임대인 부담']], ['지원사업', [H.prog, ' 신청 검토']]],
-      full: ['임대인은 ', H.work, ' 공사를 ', H.months, ' 동안 하고, 예상 절감률은 ', H.rate, '이다. 공사비 ', H.invest, '은 임대인이 부담하며, ', H.prog, ' 신청을 함께 검토한다.'] },
-    { k: '절감액 산정',
-      keys: [['계산', ['기온 보정 기저선 − 실측 사용량']], ['예측 오차', [H.cv]], ['설명력', [H.r2]], ['단가', ['전기 ', H.pe, ' · 가스 ', H.pg]], ['갱신', ['계약 시점 실제 요금표']]],
-      full: ['절감량은 기온 보정 기저선과 실측 사용량의 차이로 산정한다. 기저선의 현재 예측 오차는 ', H.cv, ', 설명력은 ', H.r2, '이다. 단가는 전기 ', H.pe, ', 가스 ', H.pg, '를 적용하되, 계약 시점의 실제 요금표로 갱신한다.'] },
-    { k: '분배',
-      keys: [['건물주', [H.own]], ['임차인', [H.ten]], ['분배 기간', [H.years]], ...(H.pay ? [['예상 회수', [H.pay]]] : [])],
-      full: ['절감액은 건물주 ', H.own, ', 임차인 ', H.ten, '로 나누고, 분배 기간은 ', H.years, '으로 한다', ...(H.pay ? ['(예상 회수 ', H.pay, ')'] : []), '.'] },
-    { k: '검증 기준',
-      keys: [['확정 기준', ['예측 오차 15% 이하 · 설명력 0.75 이상']], ['지금 판정', [H.verdict]], ['못 채우면', ['잠정 정산 → 연 합계로 다시 판단']]],
-      full: ['예측 오차 15% 이하, 설명력 0.75 이상을 모두 채우지 못하면 월별 금액을 확정하지 않고 ', H.verdict, '하며, 잠정 정산 후 연 단위 합계로 확정 여부를 다시 판단한다.'] },
-    { k: '보류 조건',
-      keys: [['보류', ['기온으로 설명 안 되는 사용량 변화']], ...(H.odd ? [['이 건물', [H.odd]]] : []), ['다시 정하기', [`영업시간${WJ}·${WJ}인원${WJ}·${WJ}설비 변경 확인 후`]]],
-      full: ['사용량에 기온으로 설명되지 않는 변화가 감지된 기간', ...(H.odd ? ['(예: ', H.odd, ')'] : []), `은 금액을 확정하지 않는다. 양측이 영업시간${WJ}·${WJ}인원${WJ}·${WJ}설비 변경 사실을 확인한 뒤 기준을 재산정한다.`] },
-    { k: '정산',
-      keys: [['주기', ['분기마다']], ['이번 분기', [H.period]], ['금액', [H.amt]], ...(has ? [['나누면', [`건물주 ${won(se.owner_won)}원 · 임차인 ${won(se.tenant_won)}원`]]] : [])],
-      full: ['정산은 분기마다 하며, ', H.period, ' 금액은 ', H.amt, has ? `(건물주 ${won(se.owner_won)}원 · 임차인 ${won(se.tenant_won)}원)이다.` : '이다.'] },
-    { k: '공실', keys: [['공실 기간', ['분배 중단 → 그만큼 기간 연장']]], full: ['공실 기간에는 절감액 분배를 중단하고, 그 기간만큼 분배 기간을 연장한다.'] },
-    { k: '승계', keys: [['임차인 변경', ['새 임차인이 남은 기간 그대로 승계']]], full: ['임차인이 바뀌면 새 임차인이 남은 기간의 분배 조건을 승계한다.'] },
-    { k: '이견 처리', keys: [['열람', ['산출 근거 · 월별 계산 내역을 양측 동일하게']]], full: ['양측은 산출 근거와 월별 계산 내역을 동일하게 열람한다.'] },
+    { k: '공사와 일정',
+      keys: [['공사', [H.work]], ['전체 일정', [H.days]], ['집 비우는 기간', [H.vac]]],
+      full: ['임대인은 ', H.work, ' 공사를 하며, 전체 일정은 ', H.days, ', 그중 임차인이 집을 비우는 기간은 ', H.vac, '으로 한다.'] },
+    { k: '집 비우는 기간 보상',
+      keys: [['보상', ['관리비 할인']], ['기간', [H.vac]], ['할인 금액', ['월 ○○원 (두 분이 정함)']]],
+      full: ['임대인은 임차인이 집을 비우는 ', H.vac, ' 동안 관리비를 할인한다. 할인 금액과 방법은 두 당사자가 협의하여 정한다.'] },
+    { k: '요금 절감',
+      keys: [['줄어드는 요금', [H.monthly, ' / 월 (예상)']], ['단가', ['전기 ', H.pe, ' · 가스 ', H.pg]], ['누구 몫', ['요금을 내는 임차인']]],
+      full: ['공사로 줄어든 전기·가스 요금은 요금을 내는 임차인의 몫으로 하며, 예상 절감액은 월 ', H.monthly, '(전기 ', H.pe, ' · 가스 ', H.pg, ' 기준)이다.'] },
+    { k: '공사비와 건물 가치',
+      keys: [['공사비', [H.invest, ' · 임대인 부담']], ['지원사업', [H.prog, ' 신청 검토']], ['건물 가치 상승', [H.value]]],
+      full: ['공사비 ', H.invest, '은 임대인이 부담하고 ', H.prog, ' 신청을 함께 검토한다. 공사로 오르는 건물 가치(', H.value, ')는 임대인에게 귀속된다.'] },
+    { k: '사용량 확인',
+      keys: [['방법', ['전기·가스 고지서 공유 (임차인 동의)']], ['AI 예측', ['오차 ', H.cv, ' · 설명력 ', H.r2]]],
+      full: ['임차인은 공사 전후 전기·가스 고지서를 임대인과 공유하는 데 동의하며, 절감량은 기온을 보정한 AI 예측(오차 ', H.cv, ', 설명력 ', H.r2, ')과 비교해 확인한다.'] },
+    { k: '이견 처리', keys: [['열람', ['산출 근거 · 계산 내역을 양측 동일하게']]], full: ['양측은 산출 근거와 계산 내역을 동일하게 열람한다.'] },
   ];
   return { meta, cl };
 }
 const docText = (S, head) => {
   const d = draftDoc(S);
-  return [head, ...d.meta.map(([k, ps]) => `${k}: ${partText(ps)}`), '', '[특약사항]',
+  return [head, `${S.benefit.data?.is_house ? '주택' : '상가건물'} 임대차계약서 특약사항`, ...d.meta.map(([k, ps]) => `${k}: ${partText(ps)}`), '', '[특약사항]',
     ...d.cl.map((c, i) => `제${i + 1}조 (${c.k}) ${partText(c.full)}`)].join('\n');
 };
 
@@ -861,9 +919,9 @@ function CopySheet({ open, onClose, S }) {
     <Sheet open={open} onClose={onClose} title="복사하기 전에 확인해 주세요"
       footer={<Button block disabled={!all} onClick={run}><Icon name="copy" size={20} />복사</Button>}>
       <div className="ck-list">
-        <Check checked={ck.split} onChange={v => setCk(c => ({ ...c, split: v }))}>분배 비율 {pct1(S.ratio)} · 기간 {S.years}년이 맞아요</Check>
-        <Check checked={ck.hold} onChange={v => setCk(c => ({ ...c, hold: v }))}>보류 규칙을 확인했어요</Check>
-        <Check checked={ck.vac} onChange={v => setCk(c => ({ ...c, vac: v }))}>공실 · 승계 조항을 확인했어요</Check>
+        <Check checked={ck.split} onChange={v => setCk(c => ({ ...c, split: v }))}>공사 일정과 집 비우는 기간이 맞아요</Check>
+        <Check checked={ck.hold} onChange={v => setCk(c => ({ ...c, hold: v }))}>관리비 할인 금액은 두 사람이 따로 정해요</Check>
+        <Check checked={ck.vac} onChange={v => setCk(c => ({ ...c, vac: v }))}>공사비와 건물 가치 조항을 확인했어요</Check>
       </div>
       {fail && <p className="t-cap t-red">복사하지 못했어요. 글을 길게 눌러 직접 복사해 주세요</p>}
     </Sheet>
@@ -880,7 +938,7 @@ function DraftDoc({ S, tools }) {
   return (
     <div className="doc" role="document" aria-label="가상 임대차 계약서 특약사항">
       <div className="doc-h">
-        <h3>상가건물 임대차계약서 <small>특약사항</small></h3>
+        <h3>{S.benefit.data?.is_house ? '주택' : '상가건물'} 임대차계약서 <small>특약사항</small></h3>
       </div>
       <dl className="doc-meta">
         {d.meta.map(([k, ps]) => <div key={k}><dt>{k}</dt><dd><Parts ps={ps} /></dd></div>)}
@@ -925,7 +983,7 @@ function DraftView({ S }) {
         <>
           <DraftDoc S={S} tools={<>
             <Button size="s" onClick={() => setCopy(true)}><Icon name="copy" size={16} />특약 복사</Button>
-            <Button size="s" variant="gray" onClick={() => go('alloc')}>분배 바꾸기</Button>
+            <Button size="s" variant="gray" onClick={() => go('alloc')}>이득 다시 보기</Button>
           </>} />
           <CopySheet open={copy} onClose={() => setCopy(false)} S={S} />
         </>
@@ -972,27 +1030,27 @@ export function CalcMethod() {
    금액은 서버가 계산한 값 그대로 (화면은 모아서 보여주기만) */
 function SumView({ S }) {
   const { go } = useShell();
-  const al = S.allocation.data, me = S.measures.data, el = S.eligibility.data, se = S.settlement.data;
+  const bn = S.benefit.data, me = S.measures.data, el = S.eligibility.data;
+  const ok = bn?.available;
   const list = S.measureList || me?.measures || [];
   const picked = list.filter(m => (S.picked ?? list.map(x => x.id)).includes(m.id));
   const [rlo, rhi] = me?.total_saving_rate || [];
-  const stay = picked.length > 0 && picked.every(m => TENANT_IMPACT[m.id]);
-  const owner = al ? (al.payback_years != null ? `${al.payback_years}년에 공사비 회수` : '기간 안에 회수 어려움') : '—';
-  const tenant = al ? `매달 ${won(al.tenant_monthly_won)}원 절약` : '—';
+  const sch = ok ? bn.schedule : null;
+  const v = ok ? bn.owner.value : null;
+  const mo = ok ? `매달 ${won(bn.tenant.monthly_won[0])}~${won(bn.tenant.monthly_won[1])}원` : '—';
+  const val = v ? (v.gain_won ? `+${koMoney(v.gain_won[0])}~${koMoney(v.gain_won[1])}` : `+${pctRange(...v.rate_range)}`) : '—';
   const cards = [
-    { k: '공사 유형', v: picked.map(m => m.name.replace(/\s*\(.*\)$/, '')).join(' · ') || '—', sub: rlo != null ? `예상 절감률 ${pctRange(rlo, rhi)}` : null, to: 'meas' },
-    { k: '공사 기간', v: `약 ${S.buildMonths}개월`, sub: stay ? '세입자는 나가지 않고 영업하며 공사 (가정값)' : '가정값', to: 'meas' },
+    { k: '공사 유형', v: picked.map(m => m.name.replace(/\s*\(.*\)$/, '')).join(' · ') || '—', sub: rlo != null ? `에너지 사용량 ${pctRange(rlo, rhi)} 감소 (예상)` : null, to: 'meas' },
+    { k: '공사 일정', v: sch ? `약 ${sch.total_days}일` : '—', sub: sch ? (sch.vacate_days ? `그중 집 비우는 기간 약 ${sch.vacate_days}일 (가정값)` : '집을 비우지 않아요 (가정값)') : null, to: 'meas' },
     { k: '공사 비용', v: koMoney(S.invest), sub: `건물주 부담${el?.programs?.length ? ` · ${el.programs.join(' · ')} 신청 가능` : ''}`, to: 'alloc' },
-    { k: '나눈 비율', v: `건물주 ${pct1(S.ratio)} · 세입자 ${pct1(1 - S.ratio)}`, sub: `분배 기간 ${S.years}년`, to: 'alloc' },
-    { k: '건물주에게 이득', v: owner, sub: al ? `연 ${won(al.owner_annual_won)}원 · ${S.years}년 동안 ${koMoney(al.owner_total_won)}` : null, tone: 'owner', to: 'alloc' },
-    { k: '세입자에게 이득', v: tenant, sub: al ? `연 ${won(al.tenant_annual_won)}원` : null, tone: 'tenant', to: 'alloc' },
+    { k: '세입자에게 이득', v: mo, sub: ok ? `줄어든 전기·가스 요금 · 연 ${manRange(...bn.saving.total_won)}` : null, tone: 'tenant', to: 'alloc' },
+    { k: '집 비우는 기간 보상', v: sch?.vacate_days ? '관리비 할인' : '필요 없음', sub: sch?.vacate_days ? '금액과 방법은 두 분이 정해요' : '사는 채로 공사해요', to: 'draft' },
+    { k: '건물주에게 이득', v: `건물 가치 ${val}`, sub: v ? `집값 ${koMoney(S.property)} 기준 · 상승률 ${pctRange(...v.rate_range)}${v.verified ? '' : ' (출처 확인 중)'}` : null, tone: 'owner', to: 'alloc' },
   ];
   return (
     <StepLayout
-      eyebrow={se?.actual_based ? <Badge tone="green" lg mark="fix">실측 기반</Badge> : <Badge tone="amber" lg mark="sim">예상 금액 · 공사 전</Badge>}
-      title={!al ? '결론을 정리하고 있어요'
-        : al.payback_years != null ? `건물주는 ${al.payback_years}년에 공사비를 돌려받고, 세입자는 매달 ${won(al.tenant_monthly_won)}원이 남아요`
-        : `세입자는 매달 ${won(al.tenant_monthly_won)}원이 남지만, 건물주는 기간 안에 공사비를 다 돌려받기 어려워요`}
+      eyebrow={<Badge tone="amber" lg mark="sim">예상치</Badge>}
+      title={ok ? `세입자는 ${mo}을 아끼고, 건물주는 건물 가치가 ${val} 올라요` : '결론을 정리하고 있어요'}
       main={
         <div className="sum">
           {cards.map(c => (
@@ -1008,15 +1066,15 @@ function SumView({ S }) {
   );
 }
 
-const VIEWS = { bld: BldView, elig: EligView, prof: ProfView, meas: MeasView, base: BaseView, alloc: AllocView, setl: SetlView, draft: DraftView, sys: SumView };
+const VIEWS = { bld: BldView, elig: EligView, prof: ProfView, meas: MeasView, base: BaseView, alloc: BenefitView, draft: DraftView, sys: SumView };
 /* 화면마다 맨 위에 한 번 · "이 화면은 무엇이고, 지금 뭘 하면 되는지" 한 줄씩 */
 const GUIDE = {
   bld: ['건물 정보가 맞는지만 확인해 주세요', '맞으면 아래 「맞아요」를 눌러 주세요. 다르면 「다른 건물」을 누르세요.'],
   elig: ['정부 지원을 받을 수 있는 건물인지 살펴봤어요', '초록 체크는 해당돼요, 빨간 X는 해당되지 않아요. 항목을 누르면 이유가 나와요.'],
   prof: ['이 건물이 해마다 전기·가스를 얼마나 썼는지 보여줘요', '막대가 높을수록 에너지를 많이 쓴 해예요. 따로 할 일은 없어요.'],
-  meas: ['에너지를 아끼려면 어떤 공사가 좋은지 보여줘요', '공사별로 1년에 얼마나 아낄 수 있는지 예상한 값이에요. 실제 금액은 아니에요.'],
+  meas: ['어떤 공사를 하면 1년에 얼마나 아끼고, 며칠 걸리는지 보여줘요', ''],
   base: ['공사를 안 했다면 얼마나 썼을지, 컴퓨터가 예측한 결과예요', '이 예측과 실제 사용량의 차이가 "아낀 양"이 돼요. 몰라도 다음 단계로 가면 돼요.'],
-  alloc: ['공사비를 건물주와 세입자가 어떻게 나눌지 정해 보는 화면이에요', '막대를 좌우로 움직여 보세요. 건물주 몫이 커질수록 세입자 몫은 줄어요.'],
+  alloc: ['공사로 세입자와 건물주가 각각 무엇을 얻는지 보여줘요', ''],
   setl: ['매달 얼마나 아꼈는지 보여줘요', '오른쪽(또는 아래) 목록에서 달을 누르면 그 달 내용이 나와요.'],
   draft: ['앞 단계에서 정한 값이 계약서에 들어간 모습이에요', '형광펜은 1~7단계에서 온 값이고, ⓘ를 누르면 왜 그 값인지 나와요. 꼭 전문가와 함께 확인하세요.'],
   sys: ['공사부터 정산까지, 두 사람에게 무엇이 남는지 한눈에 정리했어요', ''],
@@ -1034,24 +1092,23 @@ function StepGuide({ id }) {
 
 export function StepView({ id, S }) {
   const V = VIEWS[id] || BldView;
-  return <><StepGuide id={id} /><V S={S} /></>;
+  return <V S={S} />;   // 단계 안내 상자는 뺐다 (2026-10-24 · 너무 당연한 말)
 }
 
 /* ══ 단계별 한 줄 요약 (모바일 단계 목록) ══ */
 export function summaries(S) {
-  const el = S.eligibility.data, pr = S.profile.data, me = S.measures.data, ba = S.baseline.data, al = S.allocation.data, se = S.settlement.data;
+  const el = S.eligibility.data, pr = S.profile.data, me = S.measures.data, ba = S.baseline.data;
+  const bn = S.benefit.data?.available ? S.benefit.data : null;
   const last = pr?.years?.[pr.years.length - 1];
   const rr = me?.total_saving_rate;
-  const pb = al?.payback_years;
   return {
     bld: S.bld.data ? { text: S.bld.data.addr } : null,
     elig: el ? { text: el.eligible ? (el.programs?.length ? `${el.programs.length}개 신청 가능` : '대상 건물') : '대상 아님', tone: el.eligible ? 'green' : 'red' } : null,
     prof: last ? { text: `${kwh(last.total)} kWh` } : null,
     meas: me?.available && rr ? { text: `${pctRange(rr[0], rr[1])} 절감` } : null,
     base: ba ? (baselineFail(ba) ? { text: '범위로 제시', tone: 'amber' } : baselinePass(ba) ? { text: '기준 충족', tone: 'green' } : { text: '판정 없음' }) : null,
-    alloc: al ? { text: Number.isFinite(pb) && pb < 99 ? `건물주 ${pct(al.owner_ratio)} · ${pb}년 회수` : `건물주 ${pct(al.owner_ratio)}` } : null,
-    setl: se ? (hasAmount(se) ? { text: `${won(se.saving_won)}원` } : { text: se.amount_state || '금액 없음', tone: se.status_code === 'REVIEW_REQUIRED' ? 'red' : undefined }) : null,
-    draft: { text: '설계안' },
+    alloc: bn ? { text: `세입자 매달 ${won(bn.tenant.monthly_won[0])}~${won(bn.tenant.monthly_won[1])}원` } : null,
+    draft: { text: '초안' },
     sys: null,
   };
 }
