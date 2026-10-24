@@ -728,54 +728,65 @@ function draftDoc(S) {
   const m = ba?.metrics || {}, mc = ba?.metric_checks || {};
   const fail = ba ? baselineFail(ba) : false;
   const odd = ba?.anomalies || [];
+  const top = odd.length ? odd.reduce((a, c) => (c.ratio > a.ratio ? c : a)) : null;
   const pr = se?.saving_basis?.prices || {};
-  const oddTxt = odd.length ? `${ymTxt(odd[0].ym)}~${ymTxt(odd[odd.length - 1].ym)} 중 ${odd.length}개월` : null;
+  const has = se && hasAmount(se);
+  // 형광펜 값 · 한 번 만들어 핵심 줄과 원문에 같이 쓴다
+  const H = {
+    addr: h(b.addr || '○○', 1, '1단계 「건물 확인」에서 맞다고 확인한 건축물대장 주소예요.'),
+    area: b.area ? h(`${Number(b.area).toLocaleString('ko-KR')}㎡`, 1, '건축물대장의 연면적이에요. 지원사업 요건과 사용량 비교에 쓰여요.') : null,
+    work: h(on.length ? on.join(', ') : '추천 공사', 4, '4단계 「추천 공사」에서 켜 둔 공사예요. 스위치로 끈 공사는 여기서 빠져요.'),
+    rate: h(rlo != null ? pctRange(rlo, rhi) : '—', 4, '고른 공사의 절감량을 더한 뒤 서로 겹치는 만큼 뺀 예상값이에요. 실제 금액은 아니에요.'),
+    invest: h(koMoney(S.invest), 6, '6단계 「이익 나누기」에서 넣은 공사비예요. 회수 기간 계산의 기준이 돼요.'),
+    prog: h(el?.programs?.length ? el.programs.join(' · ') : '지원사업', 2, el?.msg ? `2단계 「지원 대상 확인」 결과예요: ${el.msg}` : '2단계 「지원 대상 확인」 결과예요.'),
+    cv: h(m.cv_rmse != null ? `${m.cv_rmse}%` : '—', 5, `5단계 「원래 사용량 예측」의 예측이 빗나간 정도예요. ${mc.cv_rmse?.ok ? '기준(15% 이하)을 충족해요.' : '기준(15% 이하)을 넘어요.'}`),
+    r2: h(m.r2 ?? '—', 5, `예측이 들어맞는 정도예요. ${mc.r2?.ok ? '기준(0.75 이상)을 충족해요.' : '기준(0.75 이상)에 못 미쳐서 금액을 범위로 보여줘요.'}`),
+    pe: h(pr.elec ? `${pr.elec.won_per_kwh}원/kWh` : '—', 7, pr.elec?.source ? `7단계 정산에 쓴 단가예요. ${pr.elec.source}` : '7단계 정산에 쓴 단가예요.'),
+    pg: h(pr.gas ? `${pr.gas.won_per_kwh}원/kWh` : '—', 7, pr.gas?.source ? `7단계 정산에 쓴 단가예요. ${pr.gas.source}` : '7단계 정산에 쓴 단가예요.'),
+    own: h(pct1(S.ratio), 6, `6단계 「이익 나누기」에서 정한 건물주 몫이에요.${al?.required_owner_ratio != null ? ` 공사비를 돌려받으려면 최소 ${pct1(al.required_owner_ratio)}가 필요해요.` : ''}`),
+    ten: h(pct1(1 - S.ratio), 6, '건물주 몫을 뺀 나머지예요. 임차인은 이만큼 요금을 덜 내요.'),
+    years: h(`${S.years}년`, 6, `6단계에서 정한 분배 기간이에요.${al?.feasibility_msg ? ` ${al.feasibility_msg}` : ''}`),
+    pay: al?.payback_years != null ? h(`${al.payback_years}년`, 6, `예상 연 절감액 ${won(al.annual_saving_won)}원 중 건물주 몫으로 공사비를 돌려받는 데 걸리는 기간이에요. 예상 금액이에요.`) : null,
+    verdict: h(fail ? '범위로 제시' : '확정', 5, fail ? '지금 예측은 기준을 모두 채우지 못해서, 금액을 한 숫자로 정하지 않고 범위로 보여줘요.' : '지금 예측은 기준을 모두 채워요.'),
+    odd: top ? h(`${ymTxt(odd[0].ym)}~${ymTxt(odd[odd.length - 1].ym)} 중 ${odd.length}개월`, 3, `3단계 「건물 현황」·5단계에서 과거 같은 달 평균보다 크게 튄 달이에요. 가장 큰 달은 ${ymTxt(top.ym)}(${top.ratio}배)예요.`) : null,
+    period: h(se?.period || '해당 분기', 7, '7단계 「월별 절약 결과」에서 고른 분기예요.'),
+    amt: h(has ? `${won(se.saving_won)}원` : (se?.amount_state || '금액 없음'), 7, se?.status_desc ? `${se.status_desc}.` : '7단계에서 계산한 분기 금액이에요.'),
+  };
   const meta = [
-    ['대상 건물', [h(b.addr || '○○', 1, '1단계 「건물 확인」에서 맞다고 확인한 건축물대장 주소예요.'),
-      ...(b.area ? [' · 연면적 ', h(`${Number(b.area).toLocaleString('ko-KR')}㎡`, 1, '건축물대장의 연면적이에요. 지원사업 요건과 사용량 비교에 쓰여요.')] : [])]],
+    ['대상 건물', [H.addr, ...(H.area ? [' · 연면적 ', H.area] : [])]],
     ['임대인', ['○○○ (건물주)']],
     ['임차인', ['○○○']],
   ];
+  /* 조항마다 keys(화면에 보이는 핵심 줄) · full(원문 · 복사) */
   const cl = [
-    ['공사와 지원', [
-      '임대인은 ', h(on.length ? on.join(', ') : '추천 공사', 4, '4단계 「추천 공사」에서 켜 둔 공사예요. 스위치로 끈 공사는 여기서 빠져요.'),
-      ' 공사를 하고, 예상 절감률은 ', h(rlo != null ? pctRange(rlo, rhi) : '—', 4, '고른 공사의 절감량을 더한 뒤 서로 겹치는 만큼 뺀 예상값이에요. 실제 금액은 아니에요.'),
-      '이다. 공사비 ', h(koMoney(S.invest), 6, '6단계 「이익 나누기」에서 넣은 공사비예요. 회수 기간 계산의 기준이 돼요.'),
-      '은 임대인이 부담하며, ', h(el?.programs?.length ? el.programs.join(' · ') : '지원사업', 2, el?.msg ? `2단계 「지원 대상 확인」 결과예요: ${el.msg}` : '2단계 「지원 대상 확인」 결과예요.'),
-      ' 신청을 함께 검토한다.']],
-    ['절감액 산정', [
-      '절감량은 기온 보정 기저선과 실측 사용량의 차이로 산정한다. 기저선의 현재 예측 오차는 ',
-      h(m.cv_rmse != null ? `${m.cv_rmse}%` : '—', 5, `5단계 「원래 사용량 예측」의 예측이 빗나간 정도예요. ${mc.cv_rmse?.ok ? '기준(15% 이하)을 충족해요.' : '기준(15% 이하)을 넘어요.'}`),
-      ', 설명력은 ', h(m.r2 ?? '—', 5, `예측이 들어맞는 정도예요. ${mc.r2?.ok ? '기준(0.75 이상)을 충족해요.' : '기준(0.75 이상)에 못 미쳐서 금액을 범위로 보여줘요.'}`),
-      '이다. 단가는 전기 ', h(pr.elec ? `${pr.elec.won_per_kwh}원/kWh` : '—', 7, pr.elec?.source ? `7단계 정산에 쓴 단가예요. ${pr.elec.source}` : '7단계 정산에 쓴 단가예요.'),
-      ', 가스 ', h(pr.gas ? `${pr.gas.won_per_kwh}원/kWh` : '—', 7, pr.gas?.source ? `7단계 정산에 쓴 단가예요. ${pr.gas.source}` : '7단계 정산에 쓴 단가예요.'),
-      '를 적용하되, 계약 시점의 실제 요금표로 갱신한다.']],
-    ['분배', [
-      '절감액은 건물주 ', h(pct1(S.ratio), 6, `6단계 「이익 나누기」에서 정한 건물주 몫이에요.${al?.required_owner_ratio != null ? ` 공사비를 돌려받으려면 최소 ${pct1(al.required_owner_ratio)}가 필요해요.` : ''}`),
-      ', 임차인 ', h(pct1(1 - S.ratio), 6, '건물주 몫을 뺀 나머지예요. 임차인은 이만큼 요금을 덜 내요.'),
-      '로 나누고, 분배 기간은 ', h(`${S.years}년`, 6, `6단계에서 정한 분배 기간이에요.${al?.feasibility_msg ? ` ${al.feasibility_msg}` : ''}`),
-      '으로 한다', ...(al?.payback_years != null ? ['(예상 회수 ', h(`${al.payback_years}년`, 6, `예상 연 절감액 ${won(al.annual_saving_won)}원 중 건물주 몫으로 공사비를 돌려받는 데 걸리는 기간이에요. 예상 금액이에요.`), ')'] : []), '.']],
-    ['검증 기준', [
-      '예측 오차 15% 이하, 설명력 0.75 이상을 모두 채우지 못하면 월별 금액을 확정하지 않고 ',
-      h(fail ? '범위로 제시' : '확정', 5, fail ? '지금 예측은 기준을 모두 채우지 못해서, 금액을 한 숫자로 정하지 않고 범위로 보여줘요.' : '지금 예측은 기준을 모두 채워요.'),
-      '하며, 잠정 정산 후 연 단위 합계로 확정 여부를 다시 판단한다.']],
-    ['보류 조건', [
-      '사용량에 기온으로 설명되지 않는 변화가 감지된 기간', ...(oddTxt ? ['(예: ', h(oddTxt, 3, `3단계 「건물 현황」·5단계에서 과거 같은 달 평균보다 크게 튄 달이에요. 가장 큰 달은 ${ymTxt(odd.reduce((a, c) => (c.ratio > a.ratio ? c : a)).ym)}(${odd.reduce((a, c) => (c.ratio > a.ratio ? c : a)).ratio}배)예요.`), ')'] : []),
-      `은 금액을 확정하지 않는다. 양측이 영업시간${WJ}·${WJ}인원${WJ}·${WJ}설비 변경 사실을 확인한 뒤 기준을 재산정한다.`]],
-    ['정산', [
-      '정산은 분기마다 하며, ', h(se?.period || '해당 분기', 7, '7단계 「월별 절약 결과」에서 고른 분기예요.'),
-      ' 금액은 ', h(se && hasAmount(se) ? `${won(se.saving_won)}원` : (se?.amount_state || '금액 없음'), 7, se?.status_desc ? `${se.status_desc}.` : '7단계에서 계산한 분기 금액이에요.'),
-      se && hasAmount(se) ? `(건물주 ${won(se.owner_won)}원 · 임차인 ${won(se.tenant_won)}원)이다.` : '이다.']],
-    ['공실', ['공실 기간에는 절감액 분배를 중단하고, 그 기간만큼 분배 기간을 연장한다.']],
-    ['승계', ['임차인이 바뀌면 새 임차인이 남은 기간의 분배 조건을 승계한다.']],
-    ['이견 처리', ['양측은 산출 근거와 월별 계산 내역을 동일하게 열람한다.']],
+    { k: '공사와 지원',
+      keys: [['공사', [H.work]], ['예상 절감률', [H.rate]], ['공사비', [H.invest, ' · 임대인 부담']], ['지원사업', [H.prog, ' 신청 검토']]],
+      full: ['임대인은 ', H.work, ' 공사를 하고, 예상 절감률은 ', H.rate, '이다. 공사비 ', H.invest, '은 임대인이 부담하며, ', H.prog, ' 신청을 함께 검토한다.'] },
+    { k: '절감액 산정',
+      keys: [['계산', ['기온 보정 기저선 − 실측 사용량']], ['예측 오차', [H.cv]], ['설명력', [H.r2]], ['단가', ['전기 ', H.pe, ' · 가스 ', H.pg]], ['갱신', ['계약 시점 실제 요금표']]],
+      full: ['절감량은 기온 보정 기저선과 실측 사용량의 차이로 산정한다. 기저선의 현재 예측 오차는 ', H.cv, ', 설명력은 ', H.r2, '이다. 단가는 전기 ', H.pe, ', 가스 ', H.pg, '를 적용하되, 계약 시점의 실제 요금표로 갱신한다.'] },
+    { k: '분배',
+      keys: [['건물주', [H.own]], ['임차인', [H.ten]], ['분배 기간', [H.years]], ...(H.pay ? [['예상 회수', [H.pay]]] : [])],
+      full: ['절감액은 건물주 ', H.own, ', 임차인 ', H.ten, '로 나누고, 분배 기간은 ', H.years, '으로 한다', ...(H.pay ? ['(예상 회수 ', H.pay, ')'] : []), '.'] },
+    { k: '검증 기준',
+      keys: [['확정 기준', ['예측 오차 15% 이하 · 설명력 0.75 이상']], ['지금 판정', [H.verdict]], ['못 채우면', ['잠정 정산 → 연 합계로 다시 판단']]],
+      full: ['예측 오차 15% 이하, 설명력 0.75 이상을 모두 채우지 못하면 월별 금액을 확정하지 않고 ', H.verdict, '하며, 잠정 정산 후 연 단위 합계로 확정 여부를 다시 판단한다.'] },
+    { k: '보류 조건',
+      keys: [['보류', ['기온으로 설명 안 되는 사용량 변화']], ...(H.odd ? [['이 건물', [H.odd]]] : []), ['다시 정하기', [`영업시간${WJ}·${WJ}인원${WJ}·${WJ}설비 변경 확인 후`]]],
+      full: ['사용량에 기온으로 설명되지 않는 변화가 감지된 기간', ...(H.odd ? ['(예: ', H.odd, ')'] : []), `은 금액을 확정하지 않는다. 양측이 영업시간${WJ}·${WJ}인원${WJ}·${WJ}설비 변경 사실을 확인한 뒤 기준을 재산정한다.`] },
+    { k: '정산',
+      keys: [['주기', ['분기마다']], ['이번 분기', [H.period]], ['금액', [H.amt]], ...(has ? [['나누면', [`건물주 ${won(se.owner_won)}원 · 임차인 ${won(se.tenant_won)}원`]]] : [])],
+      full: ['정산은 분기마다 하며, ', H.period, ' 금액은 ', H.amt, has ? `(건물주 ${won(se.owner_won)}원 · 임차인 ${won(se.tenant_won)}원)이다.` : '이다.'] },
+    { k: '공실', keys: [['공실 기간', ['분배 중단 → 그만큼 기간 연장']]], full: ['공실 기간에는 절감액 분배를 중단하고, 그 기간만큼 분배 기간을 연장한다.'] },
+    { k: '승계', keys: [['임차인 변경', ['새 임차인이 남은 기간 그대로 승계']]], full: ['임차인이 바뀌면 새 임차인이 남은 기간의 분배 조건을 승계한다.'] },
+    { k: '이견 처리', keys: [['열람', ['산출 근거 · 월별 계산 내역을 양측 동일하게']]], full: ['양측은 산출 근거와 월별 계산 내역을 동일하게 열람한다.'] },
   ];
   return { meta, cl };
 }
 const docText = (S, head) => {
   const d = draftDoc(S);
   return [head, ...d.meta.map(([k, ps]) => `${k}: ${partText(ps)}`), '', '[특약사항]',
-    ...d.cl.map(([k, ps], i) => `제${i + 1}조 (${k}) ${partText(ps)}`)].join('\n');
+    ...d.cl.map((c, i) => `제${i + 1}조 (${c.k}) ${partText(c.full)}`)].join('\n');
 };
 
 /* 형광펜 · 앞 단계에서 온 값 */
@@ -829,9 +840,13 @@ function CopySheet({ open, onClose, S }) {
   );
 }
 
-/* 가상 계약서 한 장 */
-function DraftDoc({ S }) {
+/* 가상 계약서 한 장 · 조항은 하나씩 (핵심 줄만, 원문은 펼쳐서) */
+function DraftDoc({ S, tools }) {
   const d = draftDoc(S);
+  const [i, setI] = useState(0);
+  const [full, setFull] = useState(false);
+  const c = d.cl[i];
+  const pick = k => { setI(k); setFull(false); };
   return (
     <div className="doc" role="document" aria-label="가상 임대차 계약서 특약사항">
       <div className="doc-h">
@@ -842,18 +857,35 @@ function DraftDoc({ S }) {
       <dl className="doc-meta">
         {d.meta.map(([k, ps]) => <div key={k}><dt>{k}</dt><dd><Parts ps={ps} /></dd></div>)}
       </dl>
-      <ol className="doc-cl">
-        {d.cl.map(([k, ps], i) => (
-          <li key={k}><b>제{i + 1}조 ({k})</b> <Parts ps={ps} /></li>
+      <div className="doc-body">
+      <div className="doc-tabs" role="tablist" aria-label="조항">
+        {d.cl.map((x, k) => (
+          <button key={x.k} type="button" role="tab" aria-selected={k === i} onClick={() => pick(k)}><i className="num">{k + 1}</i>{x.k}</button>
         ))}
-      </ol>
-      <p className="doc-sign">2026년 ○월 ○일 &nbsp; 임대인 ○○○ (인) &nbsp; 임차인 ○○○ (인)</p>
+      </div>
+      <section key={i} className="doc-c soft-in" aria-label={`제${i + 1}조 ${c.k}`}>
+        <h4>제{i + 1}조 <span>{c.k}</span></h4>
+        <dl className="doc-keys">
+          {c.keys.map(([k, ps]) => <div key={k}><dt>{k}</dt><dd><Parts ps={ps} /></dd></div>)}
+        </dl>
+        <button type="button" className="doc-full-btn" aria-expanded={full} onClick={() => setFull(v => !v)}>{full ? '원문 접기' : '원문 보기'}</button>
+        {full && <p className="doc-full"><Parts ps={c.full} /></p>}
+      </section>
+      </div>
+      <div className="doc-foot">
+        {tools && <div className="doc-tools">{tools}</div>}
+        <div className="doc-nav">
+          <button type="button" disabled={i === 0} onClick={() => pick(i - 1)}><Icon name="left" size={16} />이전 조항</button>
+          <span className="num">{i + 1} / {d.cl.length}</span>
+          <button type="button" disabled={i === d.cl.length - 1} onClick={() => pick(i + 1)}>다음 조항<Icon name="right" size={16} /></button>
+        </div>
+      </div>
     </div>
   );
 }
 
 function DraftView({ S }) {
-  const { go, device } = useShell();
+  const { go } = useShell();
   const [copy, setCopy] = useState(false);
   return (
     <StepLayout
@@ -862,24 +894,13 @@ function DraftView({ S }) {
         : <><Badge tone="gray" lg>설계안 · 법적 효력 없음</Badge><Info>실제 계약서로 쓰려면 법률 검토가 필요해요</Info></>}
       title="앞에서 정한 값이 계약서에 이렇게 들어가요"
       main={
-        <div className="stack-16">
-          <DraftDoc S={S} />
-          {device === 'm' && <Button variant="gray" size="m" onClick={() => setCopy(true)}><Icon name="copy" size={18} />특약 복사</Button>}
+        <>
+          <DraftDoc S={S} tools={<>
+            <Button size="s" onClick={() => setCopy(true)}><Icon name="copy" size={16} />특약 복사</Button>
+            <Button size="s" variant="gray" onClick={() => go('alloc')}>분배 바꾸기</Button>
+          </>} />
           <CopySheet open={copy} onClose={() => setCopy(false)} S={S} />
-        </div>
-      }
-      sideTitle="들어간 조건" sideMode="hide"
-      side={
-        <div className="stack-16">
-          <div className="rows lined">
-            <Row k="건물주 몫" v={pct1(S.ratio)} />
-            <Row k="임차인 몫" v={pct1(1 - S.ratio)} />
-            <Row k="분배 기간" v={`${S.years}년`} />
-          </div>
-          <Button size="m" block onClick={() => setCopy(true)}><Icon name="copy" size={18} />특약 복사</Button>
-          <Button variant="gray" size="m" block onClick={() => go('alloc')}>분배 바꾸기</Button>
-          <AskLink title="조건부터 AI와 다시 정하기" send={false} q={`공사비 ${koMoney(S.invest).replace(/원$/, '')} 원, ${S.years}년 안에 회수하고 싶어요`} />
-        </div>
+        </>
       } />
   );
 }

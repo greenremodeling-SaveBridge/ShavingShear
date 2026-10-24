@@ -1476,6 +1476,66 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 .hl .info-btn, .hl > button { vertical-align: -2px; margin-left: 1px; }
 .hl-src { font-weight: 700; opacity: 0.72; }
 /* PC · 종이 안에서만 스크롤 (페이지는 그대로) */
-.pc .doc { max-height: calc(100dvh - 478px); min-height: 260px; overflow-y: auto; scrollbar-width: thin; }
+/* 조항은 하나씩 · 핵심 줄(항목 → 값) */
+.pc .step-body.solo .step-l:has(.doc) { max-width: none; }
+.doc { gap: 12px; padding: 18px 22px 16px; }
+.doc-h { padding-bottom: 10px; }
+.doc-meta { display: flex; flex-wrap: wrap; gap: 2px 22px; }
+.doc-meta dt { flex: none; }
+.doc-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.doc-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px 0 6px; border-radius: 999px; background: var(--surface-2); font-size: 13px; font-weight: 700; color: var(--text-2); transition: background 0.15s, color 0.15s; }
+.doc-tabs button i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); font-style: normal; font-size: 11px; }
+.doc-tabs button:hover { background: var(--fill); }
+.doc-tabs button[aria-selected="true"] { background: var(--text-1); color: var(--surface); }
+.doc-tabs button[aria-selected="true"] i { background: var(--surface); color: var(--text-1); }
+.doc-c { display: grid; gap: 8px; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); }
+.doc-c h4 { font-size: 17px; line-height: 24px; font-weight: 800; }
+.doc-c h4 span { margin-left: 4px; }
+.doc-keys { display: grid; gap: 6px; }
+.doc-keys > div { display: flex; align-items: baseline; gap: 14px; }
+.doc-keys dt { flex: 0 0 92px; font-size: 14px; color: var(--text-3); font-weight: 600; }
+.doc-keys dd { min-width: 0; font-size: 16px; line-height: 26px; }
+.doc-full-btn { justify-self: start; font-size: 13px; font-weight: 700; color: var(--text-3); text-decoration: underline; text-underline-offset: 3px; }
+.doc-full { font-size: 14px; line-height: 24px; color: var(--text-2); }
+.doc-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.doc-tools { display: flex; gap: 8px; }
+.doc-nav { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-3); }
+.doc-nav button { display: inline-flex; align-items: center; gap: 2px; height: 34px; padding: 0 10px; border-radius: 10px; font-size: 14px; font-weight: 700; color: var(--text-1); box-shadow: inset 0 0 0 1px var(--line-2); }
+.doc-nav button:hover:not(:disabled) { background: var(--fill); }
+.doc-nav button:disabled { color: var(--text-4); box-shadow: inset 0 0 0 1px var(--line); }
 .p-headrow { margin-bottom: 10px; }
 .pc .sguide { margin-bottom: 12px; }
+
+/* PC 계약서 · 머리 한 줄, 왼쪽 조항 목록 | 오른쪽 조항 (스크롤 없이) */
+.pc .step-l:has(.doc) .step-head { display: none; }
+.pc .doc-h { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; text-align: left; padding-bottom: 8px; }
+.pc .doc-h h3 { order: 1; font-size: 18px; line-height: 26px; }
+.pc .doc-k { order: 2; justify-self: auto; }
+.pc .doc-legend { order: 3; margin-left: auto; }
+.pc .doc-body { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 14px; align-items: start; padding-top: 12px; border-top: 1px solid var(--line); }
+.pc .doc-tabs { flex-direction: column; flex-wrap: nowrap; gap: 3px; padding: 0; border: 0; }
+.pc .doc-tabs button { width: 100%; height: 30px; border-radius: 8px; background: none; justify-content: flex-start; }
+.pc .doc-tabs button:hover { background: var(--surface-2); }
+.pc .doc-tabs button[aria-selected="true"] { background: var(--text-1); }
+.pc .doc-c { min-height: 100%; align-content: start; }
+.doc-tabs button i { line-height: 1; padding-top: 1px; }
+/* 낮은 화면(노트북)에서는 더 촘촘하게 */
+@media (max-height: 800px) {
+  .pc .sguide { display: none; }
+  .pc .doc { gap: 8px; padding: 12px 18px; }
+  .pc .doc-legend { display: none; }
+  .pc .doc-tabs button { height: 25px; font-size: 12px; }
+  .pc .doc-body { padding-top: 8px; }
+  .pc .doc-c { padding: 10px 14px; gap: 4px; }
+  .pc .doc-keys { gap: 2px; }
+}
+.pc .step-l:has(.doc) .step-main { margin-top: 0; }
+@media (max-height: 800px) {
+  .pc .doc-tabs { gap: 1px; }
+  .pc .p-next { padding: 8px 0 10px; }
+}
+@media (max-height: 800px) {
+  .pc .doc-c h4 { font-size: 15px; line-height: 20px; }
+  .pc .doc-keys dd { line-height: 23px; }
+  .pc .doc-full-btn { line-height: 18px; }
+}
