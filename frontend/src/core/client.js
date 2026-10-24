@@ -42,6 +42,7 @@ function makeSnap() {
     epoch: st.epoch,               // 모드가 바뀔 때마다 1씩 — 화면이 다시 불러온다
     booted: st.booted,
     hasBackup: !!st.backup,
+    backupPicks: !!st.backup?.picks,  // 저장 데이터에 공사 조합이 다 있으면 스위치도 움직인다
     stampTime: stampTime(st.backup?.meta?.generated_at),
   };
 }
@@ -110,12 +111,16 @@ async function fromBackup(path, body) {
       const ids = (q.get('ids') || '').split(',').filter(Boolean);
       const all = pick('measures');
       if (!ids.length || ids.length === (all.measures || []).length) return all;
+      const hit = B.picks?.[ids.join(',')]?.measures;
+      if (hit) return hit;
       throw new ApiError('저장된 시연 데이터에서는 대책 선택을 바꿀 수 없습니다', { status: 409 });
     }
     case '/api/benefit': {
       const ids = (q.get('ids') || '').split(',').filter(Boolean);
       const all = pick('benefit');
       if (!ids.length || ids.length === (B.measures?.measures || []).length) return all;
+      const hit = B.picks?.[ids.join(',')]?.benefit;
+      if (hit) return hit;
       throw new ApiError('저장된 시연 데이터에서는 공사 선택을 바꿀 수 없습니다', { status: 409 });
     }
     case '/api/allocation': {

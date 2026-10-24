@@ -73,6 +73,7 @@ def build():
         "profile": get_profile(BLD),
         "measures": get_measures(BLD),
         "benefit": get_benefit(BLD),
+        "picks": {},
         "demo": demo,
         # 슬라이더가 5% 단위이므로 19가지를 모두 저장해 둔다
         "allocation": [
@@ -83,6 +84,14 @@ def build():
         "settlement": {},
         "explain": {},
     }
+
+    # 공사를 켜고 끈 모든 조합 — 서버 없이도 4단계 스위치가 움직이게 (키: 목록 순서대로 id 를 쉼표로)
+    from itertools import combinations
+    all_ids = [m["id"] for m in snap["measures"]["measures"]]
+    for k in range(1, len(all_ids)):
+        for c in combinations(all_ids, k):
+            key = ",".join(c)
+            snap["picks"][key] = {"measures": get_measures(BLD, key), "benefit": get_benefit(BLD, key)}
 
     cases = [(c["year"], c["quarter"]) for c in demo["cases"]] + [(2026, 3)]
     for y, q in cases:

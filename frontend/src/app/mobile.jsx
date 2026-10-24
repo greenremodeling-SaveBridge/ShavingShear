@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cx } from '../core/format.js';
 import { usePersistent } from '../core/hooks.js';
-import { BigTextBtn, BuddyFace, Button, Fold, Icon, Sheet, connInfo } from './ui.jsx';
+import { BigTextBtn, Button, Fold, Icon, Sheet, connInfo } from './ui.jsx';
 import { useAssist } from './assistant/context.js';
 import { Assistant, AiTitle } from './assistant/Assistant.jsx';
 import { AskRow } from './assistant/Nudge.jsx';
@@ -53,30 +53,6 @@ function StepSheet({ open, onClose, S, cur, onPick, onExit }) {
   );
 }
 
-/* 처음 들어온 조회 화면에서만 한 번 · AI 설명이 있다고 알려주는 반투명 안내 */
-const tipSeen = () => { try { return sessionStorage.getItem('ss.tip.ai.m') === '1'; } catch { return false; } };
-const tipMark = () => { try { sessionStorage.setItem('ss.tip.ai.m', '1'); } catch { /* 무시 */ } };
-function MobileTip() {
-  const [show, setShow] = useState(false);
-  useEffect(() => {
-    if (tipSeen()) return undefined;
-    const t1 = setTimeout(() => setShow(true), 1200);
-    const t2 = setTimeout(() => { setShow(false); tipMark(); }, 9200);
-    return () => { clearTimeout(t1); clearTimeout(t2); tipMark(); };
-  }, []);
-  if (!show) return null;
-  return (
-    <div className="ai-tip" role="status">
-      <BuddyFace size={44} live />
-      <div className="ai-tip-b">
-        <b>AI 설명 기능이 있어요!</b>
-        <p>정산 단계에서 새싹을 누르면 달마다 금액이 왜 이렇게 나왔는지 설명해 드려요</p>
-      </div>
-      <button type="button" onClick={() => { setShow(false); tipMark(); }}>알겠어요</button>
-    </div>
-  );
-}
-
 export function MobileApp({ S, onExit }) {
   const a = useAssist();
   const [i, setI] = usePersistent('ss.v4.step', 0, v => (Number.isInteger(v) && v >= 0 && v < STEPS.length ? v : 0));
@@ -100,7 +76,6 @@ export function MobileApp({ S, onExit }) {
   return (
     <ShellProvider value={shell}>
       <div className="m-app">
-        {i === 0 && <MobileTip />}
         <header className="m-bar">
           <button type="button" className="icon-btn" aria-label={i === 0 ? '건물 고르기로 돌아가기' : '이전 단계'}
             onClick={() => (i === 0 ? onExit() : go(i - 1))}>

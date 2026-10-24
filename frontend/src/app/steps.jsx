@@ -252,7 +252,7 @@ function MeasView({ S }) {
   if (!r.data) return <StepPending r={r} />;
   const d = r.data;
   if (!d.available) return <StepLayout title="개선 대책을 계산할 수 없어요" main={d.reason ? <p className="t-b">{tidy(d.reason)}</p> : null} />;
-  const live = S.conn.mode !== 'backup';
+  const live = S.conn.mode !== 'backup' || S.conn.backupPicks;
   const list = S.measureList || d.measures;   // 끈 대책도 남아 있는 전체 목록
   const all = list.map(m => m.id);
   const sel = S.picked ?? all;

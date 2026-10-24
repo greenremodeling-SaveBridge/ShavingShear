@@ -14,6 +14,7 @@ export const RATIO = { min: RATIO_MIN, max: RATIO_MAX, step: RATIO_STEP, snap: r
 const exact = r => +Math.min(RATIO_MAX, Math.max(RATIO_MIN, r)).toFixed(3);
 export const INVEST = { min: 1_000_000, max: 10_000_000_000 };
 export const YEARS = { min: 1, max: 30 };
+const START_OFF = ['solar'];
 
 export function useSavingShare({ autoLookup = true } = {}) {
   const conn = useClient();
@@ -98,6 +99,14 @@ export function useSavingShare({ autoLookup = true } = {}) {
   // 서버는 고른 대책만 돌려준다 → 전부 고른 상태의 목록을 기억해 두고, 끈 대책도 목록에 남겨 다시 켤 수 있게
   const allMeas = useRef(null);
   if (!picked && measures.data?.measures) allMeas.current = measures.data.measures;
+  // 처음엔 태양광을 끈 채로 시작한다 (시연 사진 8) · 건물을 새로 조회할 때마다 한 번
+  const startSet = useRef(0);
+  useEffect(() => {
+    if (picked || measures.status !== 'ok' || startSet.current === nonce) return;
+    startSet.current = nonce;
+    const ids = measures.data.measures.map(m => m.id);
+    if (ids.some(x => START_OFF.includes(x))) setPicked(ids.filter(x => !START_OFF.includes(x)));
+  }, [measures.status, nonce, picked]); // eslint-disable-line react-hooks/exhaustive-deps
   const baseline = useResource(['base', nonce], () => fetchBaseline(id), { enabled: on });
 
   const dInvest = useDebounced(invest, 250);
