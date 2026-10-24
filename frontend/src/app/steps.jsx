@@ -715,16 +715,83 @@ function SetlView({ S }) {
   );
 }
 
-/* ══ ⑧ 임대차 특약 ══ */
-const CLAUSES = S => [
-  ['절감액 산정', '절감량은 기온 보정 기저선과 실측 사용량의 차이로 산정하며, 단가는 계약 시점의 실제 요금표를 적용한다.'],
-  ['분배', `절감액은 건물주 ${pct1(S.ratio)}, 임차인 ${pct1(1 - S.ratio)}로 분배하고, 분배 기간은 ${S.years}년으로 한다.`],
-  ['검증 기준', '예측 오차가 기준을 넘거나 설명력이 기준에 못 미치는 경우, 월별 금액은 확정하지 않고 잠정으로 정산하며 연 단위 합계로 확정 여부를 다시 판단한다.'],
-  ['보류 조건', '사용량에 기온으로 설명되지 않는 변화가 감지된 기간은 금액을 확정하지 않는다. 양측이 영업시간·인원·설비 변경 사실을 확인한 뒤 기준을 재산정한다.'],
-  ['공실', '공실 기간에는 절감액 분배를 중단하고, 그 기간만큼 분배 기간을 연장한다.'],
-  ['승계', '임차인이 바뀌면 새 임차인이 남은 기간의 분배 조건을 승계한다.'],
-  ['이견 처리', '양측은 산출 근거와 월별 계산 내역을 동일하게 열람한다.'],
-];
+/* ══ ⑧ 임대차 특약 ══
+   가상 계약서 한 장. 1~7단계에서 정한 값은 형광펜(h) · i 를 누르면 어느 단계에서 왜 이 값인지.
+   화면과 복사 글이 같은 문안에서 나온다 (draftDoc) */
+const h = (v, n, why) => ({ v, n, why });
+const partText = ps => ps.map(p => (typeof p === 'string' ? p : p.v)).join('');
+function draftDoc(S) {
+  const b = S.bld.data || {}, el = S.eligibility.data, me = S.measures.data, ba = S.baseline.data, al = S.allocation.data, se = S.settlement.data;
+  const list = S.measureList || me?.measures || [];
+  const on = list.filter(m => (S.picked ?? list.map(x => x.id)).includes(m.id)).map(m => m.name);
+  const [rlo, rhi] = me?.total_saving_rate || [];
+  const m = ba?.metrics || {}, mc = ba?.metric_checks || {};
+  const fail = ba ? baselineFail(ba) : false;
+  const odd = ba?.anomalies || [];
+  const pr = se?.saving_basis?.prices || {};
+  const oddTxt = odd.length ? `${ymTxt(odd[0].ym)}~${ymTxt(odd[odd.length - 1].ym)} 중 ${odd.length}개월` : null;
+  const meta = [
+    ['대상 건물', [h(b.addr || '○○', 1, '1단계 「건물 확인」에서 맞다고 확인한 건축물대장 주소예요.'),
+      ...(b.area ? [' · 연면적 ', h(`${Number(b.area).toLocaleString('ko-KR')}㎡`, 1, '건축물대장의 연면적이에요. 지원사업 요건과 사용량 비교에 쓰여요.')] : [])]],
+    ['임대인', ['○○○ (건물주)']],
+    ['임차인', ['○○○']],
+  ];
+  const cl = [
+    ['공사와 지원', [
+      '임대인은 ', h(on.length ? on.join(', ') : '추천 공사', 4, '4단계 「추천 공사」에서 켜 둔 공사예요. 스위치로 끈 공사는 여기서 빠져요.'),
+      ' 공사를 하고, 예상 절감률은 ', h(rlo != null ? pctRange(rlo, rhi) : '—', 4, '고른 공사의 절감량을 더한 뒤 서로 겹치는 만큼 뺀 예상값이에요. 실제 금액은 아니에요.'),
+      '이다. 공사비 ', h(koMoney(S.invest), 6, '6단계 「이익 나누기」에서 넣은 공사비예요. 회수 기간 계산의 기준이 돼요.'),
+      '은 임대인이 부담하며, ', h(el?.programs?.length ? el.programs.join(' · ') : '지원사업', 2, el?.msg ? `2단계 「지원 대상 확인」 결과예요: ${el.msg}` : '2단계 「지원 대상 확인」 결과예요.'),
+      ' 신청을 함께 검토한다.']],
+    ['절감액 산정', [
+      '절감량은 기온 보정 기저선과 실측 사용량의 차이로 산정한다. 기저선의 현재 예측 오차는 ',
+      h(m.cv_rmse != null ? `${m.cv_rmse}%` : '—', 5, `5단계 「원래 사용량 예측」의 예측이 빗나간 정도예요. ${mc.cv_rmse?.ok ? '기준(15% 이하)을 충족해요.' : '기준(15% 이하)을 넘어요.'}`),
+      ', 설명력은 ', h(m.r2 ?? '—', 5, `예측이 들어맞는 정도예요. ${mc.r2?.ok ? '기준(0.75 이상)을 충족해요.' : '기준(0.75 이상)에 못 미쳐서 금액을 범위로 보여줘요.'}`),
+      '이다. 단가는 전기 ', h(pr.elec ? `${pr.elec.won_per_kwh}원/kWh` : '—', 7, pr.elec?.source ? `7단계 정산에 쓴 단가예요. ${pr.elec.source}` : '7단계 정산에 쓴 단가예요.'),
+      ', 가스 ', h(pr.gas ? `${pr.gas.won_per_kwh}원/kWh` : '—', 7, pr.gas?.source ? `7단계 정산에 쓴 단가예요. ${pr.gas.source}` : '7단계 정산에 쓴 단가예요.'),
+      '를 적용하되, 계약 시점의 실제 요금표로 갱신한다.']],
+    ['분배', [
+      '절감액은 건물주 ', h(pct1(S.ratio), 6, `6단계 「이익 나누기」에서 정한 건물주 몫이에요.${al?.required_owner_ratio != null ? ` 공사비를 돌려받으려면 최소 ${pct1(al.required_owner_ratio)}가 필요해요.` : ''}`),
+      ', 임차인 ', h(pct1(1 - S.ratio), 6, '건물주 몫을 뺀 나머지예요. 임차인은 이만큼 요금을 덜 내요.'),
+      '로 나누고, 분배 기간은 ', h(`${S.years}년`, 6, `6단계에서 정한 분배 기간이에요.${al?.feasibility_msg ? ` ${al.feasibility_msg}` : ''}`),
+      '으로 한다', ...(al?.payback_years != null ? ['(예상 회수 ', h(`${al.payback_years}년`, 6, `예상 연 절감액 ${won(al.annual_saving_won)}원 중 건물주 몫으로 공사비를 돌려받는 데 걸리는 기간이에요. 예상 금액이에요.`), ')'] : []), '.']],
+    ['검증 기준', [
+      '예측 오차 15% 이하, 설명력 0.75 이상을 모두 채우지 못하면 월별 금액을 확정하지 않고 ',
+      h(fail ? '범위로 제시' : '확정', 5, fail ? '지금 예측은 기준을 모두 채우지 못해서, 금액을 한 숫자로 정하지 않고 범위로 보여줘요.' : '지금 예측은 기준을 모두 채워요.'),
+      '하며, 잠정 정산 후 연 단위 합계로 확정 여부를 다시 판단한다.']],
+    ['보류 조건', [
+      '사용량에 기온으로 설명되지 않는 변화가 감지된 기간', ...(oddTxt ? ['(예: ', h(oddTxt, 3, `3단계 「건물 현황」·5단계에서 과거 같은 달 평균보다 크게 튄 달이에요. 가장 큰 달은 ${ymTxt(odd.reduce((a, c) => (c.ratio > a.ratio ? c : a)).ym)}(${odd.reduce((a, c) => (c.ratio > a.ratio ? c : a)).ratio}배)예요.`), ')'] : []),
+      `은 금액을 확정하지 않는다. 양측이 영업시간${WJ}·${WJ}인원${WJ}·${WJ}설비 변경 사실을 확인한 뒤 기준을 재산정한다.`]],
+    ['정산', [
+      '정산은 분기마다 하며, ', h(se?.period || '해당 분기', 7, '7단계 「월별 절약 결과」에서 고른 분기예요.'),
+      ' 금액은 ', h(se && hasAmount(se) ? `${won(se.saving_won)}원` : (se?.amount_state || '금액 없음'), 7, se?.status_desc ? `${se.status_desc}.` : '7단계에서 계산한 분기 금액이에요.'),
+      se && hasAmount(se) ? `(건물주 ${won(se.owner_won)}원 · 임차인 ${won(se.tenant_won)}원)이다.` : '이다.']],
+    ['공실', ['공실 기간에는 절감액 분배를 중단하고, 그 기간만큼 분배 기간을 연장한다.']],
+    ['승계', ['임차인이 바뀌면 새 임차인이 남은 기간의 분배 조건을 승계한다.']],
+    ['이견 처리', ['양측은 산출 근거와 월별 계산 내역을 동일하게 열람한다.']],
+  ];
+  return { meta, cl };
+}
+const docText = (S, head) => {
+  const d = draftDoc(S);
+  return [head, ...d.meta.map(([k, ps]) => `${k}: ${partText(ps)}`), '', '[특약사항]',
+    ...d.cl.map(([k, ps], i) => `제${i + 1}조 (${k}) ${partText(ps)}`)].join('\n');
+};
+
+/* 형광펜 · 앞 단계에서 온 값 */
+function Hl({ p }) {
+  return (
+    <mark className="hl">
+      {p.v}
+      <Info label={`${p.n}단계에서 온 값 · 이유 보기`} size={14}>
+        <p className="hl-src">{p.n}단계 · {STEPS[p.n - 1]?.name}</p>
+        <p>{tidy(p.why)}</p>
+      </Info>
+    </mark>
+  );
+}
+const Parts = ({ ps }) => ps.map((p, i) => (typeof p === 'string' ? <span key={i}>{p}</span> : <Hl key={i} p={p} />));
+
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); return true; } catch { /* 아래 방법 */ }
   try {
@@ -743,8 +810,8 @@ function CopySheet({ open, onClose, S }) {
   useEffect(() => { if (open) { setCk({ split: false, hold: false, vac: false }); setFail(false); } }, [open]);
   const all = ck.split && ck.hold && ck.vac;
   const run = async () => {
-    const head = S.aiDraft ? '[법률 검토 전 초안 · AI가 정리한 문안입니다]\n' : '[설계안 · 법적 효력 없음]\n';
-    const ok = await copyText(head + CLAUSES(S).map(([k, v], i) => `${i + 1}. ${k}: ${v}`).join('\n'));
+    const head = S.aiDraft ? '[법률 검토 전 초안 · AI가 정리한 문안입니다]' : '[설계안 · 법적 효력 없음]';
+    const ok = await copyText(docText(S, head));
     if (!ok) { setFail(true); return; }
     onClose();
     ai?.showToast({ text: '특약 초안을 복사했어요', mood: 'cheer' });
@@ -762,31 +829,41 @@ function CopySheet({ open, onClose, S }) {
   );
 }
 
+/* 가상 계약서 한 장 */
+function DraftDoc({ S }) {
+  const d = draftDoc(S);
+  return (
+    <div className="doc" role="document" aria-label="가상 임대차 계약서 특약사항">
+      <div className="doc-h">
+        <span className="doc-k">가상 예시 · 법적 효력 없음</span>
+        <h3>상가건물 임대차계약서 <small>특약사항</small></h3>
+        <p className="doc-legend"><mark className="hl">형광펜</mark> 1~7단계에서 정한 값 · <Icon name="info" size={14} /> 를 누르면 이유</p>
+      </div>
+      <dl className="doc-meta">
+        {d.meta.map(([k, ps]) => <div key={k}><dt>{k}</dt><dd><Parts ps={ps} /></dd></div>)}
+      </dl>
+      <ol className="doc-cl">
+        {d.cl.map(([k, ps], i) => (
+          <li key={k}><b>제{i + 1}조 ({k})</b> <Parts ps={ps} /></li>
+        ))}
+      </ol>
+      <p className="doc-sign">2026년 ○월 ○일 &nbsp; 임대인 ○○○ (인) &nbsp; 임차인 ○○○ (인)</p>
+    </div>
+  );
+}
+
 function DraftView({ S }) {
   const { go, device } = useShell();
   const [copy, setCopy] = useState(false);
-  const B = ({ children }) => <mark className="blank num">{children}</mark>;
-  const items = CLAUSES(S).map(([k, v]) => [k, k === '분배'
-    ? <>절감액은 건물주 <B>{pct1(S.ratio)}</B>, 임차인 <B>{pct1(1 - S.ratio)}</B>로 분배하고, 분배 기간은 <B>{S.years}년</B>으로 한다.</>
-    : k === '보류 조건' ? <>사용량에 기온으로 설명되지 않는 변화가 감지된 기간은 금액을 확정하지 않는다. 양측이 영업시간{WJ}·{WJ}인원{WJ}·{WJ}설비 변경 사실을 확인한 뒤 기준을 재산정한다.</>
-      : v]);
   return (
     <StepLayout
       eyebrow={S.aiDraft
         ? <><Badge tone="blue" lg><Icon name="sparkle" size={14} />법률 검토 전 초안 · AI가 정리한 문안입니다</Badge><Info>실제 계약서로 쓰려면 법률 검토가 필요해요</Info></>
         : <><Badge tone="gray" lg>설계안 · 법적 효력 없음</Badge><Info>실제 계약서로 쓰려면 법률 검토가 필요해요</Info></>}
-      title="분배 조건이 특약에 그대로 들어가요"
+      title="앞에서 정한 값이 계약서에 이렇게 들어가요"
       main={
         <div className="stack-16">
-          <ol className="folds clauses">
-            {items.map(([k, v], i) => (
-              <li key={k}>
-                <Fold defaultOpen={k === '분배'} title={<span className="cl"><span className="cl-n num">{i + 1}</span>{k}</span>}>
-                  <p className="cl-p">{v}</p>
-                </Fold>
-              </li>
-            ))}
-          </ol>
+          <DraftDoc S={S} />
           {device === 'm' && <Button variant="gray" size="m" onClick={() => setCopy(true)}><Icon name="copy" size={18} />특약 복사</Button>}
           <CopySheet open={copy} onClose={() => setCopy(false)} S={S} />
         </div>
@@ -852,7 +929,7 @@ const GUIDE = {
   base: ['공사를 안 했다면 얼마나 썼을지, 컴퓨터가 예측한 결과예요', '이 예측과 실제 사용량의 차이가 "아낀 양"이 돼요. 몰라도 다음 단계로 가면 돼요.'],
   alloc: ['공사비를 건물주와 세입자가 어떻게 나눌지 정해 보는 화면이에요', '막대를 좌우로 움직여 보세요. 건물주 몫이 커질수록 세입자 몫은 줄어요.'],
   setl: ['매달 얼마나 아꼈는지 보여줘요', '오른쪽(또는 아래) 목록에서 달을 누르면 그 달 내용이 나와요.'],
-  draft: ['계약서에 넣을 문장이에요', '「복사」를 누른 뒤 계약서에 붙여 넣으면 돼요. 꼭 전문가와 함께 확인하세요.'],
+  draft: ['앞 단계에서 정한 값이 계약서에 들어간 모습이에요', '형광펜은 1~7단계에서 온 값이고, ⓘ를 누르면 왜 그 값인지 나와요. 꼭 전문가와 함께 확인하세요.'],
   sys: ['이 앱이 어떻게 계산하는지 알려주는 화면이에요', '궁금한 분만 읽으세요. 몰라도 사용하는 데 문제없어요.'],
 };
 function StepGuide({ id }) {
