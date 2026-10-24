@@ -4,7 +4,7 @@ import { cx } from '../core/format.js';
 import { usePersistent } from '../core/hooks.js';
 import { BigTextBtn, BuddyFace, Button, Fold, Icon, Sheet, connInfo } from './ui.jsx';
 import { useAssist } from './assistant/context.js';
-import { Assistant, AiTitle, ViewerToggle } from './assistant/Assistant.jsx';
+import { Assistant, AiTitle } from './assistant/Assistant.jsx';
 import { AskRow } from './assistant/Nudge.jsx';
 import { ThemeBtn } from './entry.jsx';
 import { ViewSetting } from './viewMode.jsx';
@@ -140,7 +140,7 @@ export function MobileApp({ S, onExit }) {
         </footer>
         <StepSheet open={list} onClose={() => setList(false)} S={S} cur={i} onPick={go} onExit={onExit} />
         {a && (
-          <Sheet open={a.open} onClose={() => a.setOpen(false)} title={<AiTitle />} aside={<ViewerToggle S={S} />} className="as-sheet">
+          <Sheet open={a.open} onClose={() => a.setOpen(false)} title={<AiTitle />} className="as-sheet">
             <Assistant S={S} variant="sheet" step={step.id} />
           </Sheet>
         )}

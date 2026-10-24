@@ -178,7 +178,6 @@ function ProfView({ S }) {
   const d = r.data;
   const ys = d.years || [];
   const last = ys[ys.length - 1];
-  const un = d.unverified || [];
   return (
     <StepLayout title={last ? `${last.year}년에 ${kwh(last.total)} kWh를 썼어요` : '연도별 사용량'}
       meta={S.benefit.data?.available && (
@@ -200,8 +199,7 @@ function ProfView({ S }) {
           )}
         </>
       }
-      sideTitle={un.length ? `현장에서 확인할 것 ${un.length}가지` : null} sideInfo={d.note ? tidy(d.note) : null} sideMode="fold"
-      side={un.length ? <div className="rows lined">{un.map(u => <Row key={u.item} k={u.item} v={u.how} />)}</div> : null} />
+      />
   );
 }
 

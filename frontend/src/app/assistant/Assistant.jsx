@@ -21,16 +21,6 @@ export const PLAN = {
   clarify: { title: '질문을 읽고 있어요', steps: [], from: 'search' },
 };
 
-export function ViewerToggle({ S }) {
-  return (
-    <div className="segbar sm as-view" role="radiogroup" aria-label="설명 관점">
-      {[['owner', '건물주'], ['tenant', '세입자']].map(([v, t]) => (
-        <button key={v} type="button" role="radio" aria-checked={S.viewer === v} onClick={() => S.setViewer(v)}>{t}</button>
-      ))}
-    </div>
-  );
-}
-
 /* 머리글 새싹: 답을 기다리면 생각 중 · 답이 오면 인사 · 오류면 놀람 */
 export function AiTitle() {
   const a = useAssist();
@@ -279,7 +269,6 @@ export function Assistant({ S, variant = 'sheet', onClose, entry, onEnter, onBac
         <header className="as-head">
           {onBack && <button type="button" className="icon-btn" aria-label="직접 설정하기로 돌아가기" onClick={onBack}><Icon name="left" size={22} /></button>}
           <AiTitle />
-          <ViewerToggle S={S} />
           {onClose && <button type="button" className="icon-btn as-x" aria-label="세이빙 AI 닫기" onClick={onClose}><Icon name="close" size={20} /></button>}
         </header>
       )}

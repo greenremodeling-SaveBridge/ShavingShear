@@ -1634,3 +1634,4 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 .ms-sch { font-size: 13px; line-height: 19px; color: var(--text-3); }
 .prof-cost { font-size: 14px; font-weight: 600; color: var(--text-2); }
 .imp-src { font-size: 12px; opacity: 0.75; }
+.pc .step-body.solo .step-l:has(.ybars) { max-width: none; }
