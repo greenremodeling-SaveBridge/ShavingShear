@@ -1636,3 +1636,5 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 .imp-src { font-size: 12px; opacity: 0.75; }
 .pc .step-body.solo .step-l:has(.ybars) { max-width: none; }
 .ms-cost { font-size: 13px; line-height: 19px; font-weight: 600; color: var(--text-2); }
+.info-pop-in { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.info-pop-in p + p { margin-top: 6px; }

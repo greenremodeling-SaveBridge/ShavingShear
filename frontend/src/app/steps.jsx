@@ -236,7 +236,8 @@ function Impact({ m }) {
       <dl>
         <div><dt>사는 채로 공사</dt><dd>{m.vacate_days ? `집을 비워야 해요 · 약 ${m.vacate_days}일` : t.stay}</dd></div>
         <div><dt>소음·분진</dt><dd>{t.noise}</dd></div>
-        <div><dt>공사 기간</dt><dd>{m.days ? `약 ${m.days}일` : '—'}</dd></div>
+        <div><dt>공사 기간</dt><dd>{m.days_note || (m.days ? `약 ${m.days}일` : '—')}</dd></div>
+        {m.start_note && <div><dt>쓰기 시작까지</dt><dd>{m.start_note}</dd></div>}
         <div><dt>주의</dt><dd>{t.note}</dd></div>
       </dl>
       <p className="imp-s">일반적인 경우예요 · 현장마다 달라요</p>

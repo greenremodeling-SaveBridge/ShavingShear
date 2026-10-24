@@ -218,8 +218,10 @@ export function Info({ children, label = '설명 보기', size = 18, ask }) {
     const vw = document.documentElement.clientWidth, vh = window.innerHeight;
     const w = Math.min(300, vw - 32);
     const left = Math.max(16, Math.min(r.left + r.width / 2 - 26, vw - 16 - w));
-    const up = r.bottom + 170 > vh && r.top > 180;
-    setPos({ left, w, top: up ? r.top - 8 : r.bottom + 8, up, ax: r.left + r.width / 2 - left });
+    // 아래 공간이 모자라면 더 넓은 위쪽으로 · 그래도 길면 창 안에서 스크롤
+    const below = vh - r.bottom - 16, above = r.top - 16;
+    const up = below < 320 && above > below;
+    setPos({ left, w, top: up ? r.top - 8 : r.bottom + 8, up, ax: r.left + r.width / 2 - left, maxH: (up ? above : below) - 8 });
     const away = e => { if (!btn.current?.contains(e.target) && !pop.current?.contains(e.target)) setOpen(false); };
     const esc = e => { if (e.key === 'Escape') { setOpen(false); btn.current?.focus(); } };
     const off = e => { if (!pop.current?.contains(e.target)) setOpen(false); };
@@ -244,7 +246,7 @@ export function Info({ children, label = '설명 보기', size = 18, ask }) {
       {open && pos && createPortal(
         <div id={id} ref={pop} role="tooltip" className={cx('info-pop', pos.up && 'up')}
           style={{ left: pos.left, top: pos.top, maxWidth: pos.w, '--ax': `${pos.ax}px` }}>
-          {children}
+          <div className="info-pop-in" style={{ maxHeight: pos.maxH }}>{children}</div>
           {ask && assist && (
             <button type="button" className="info-ask" onClick={() => { setOpen(false); assist.ask(ask.q, { send: ask.send !== false }); }}>
               <Icon name="sparkle" size={14} />{ask.label || '세이빙 AI에게 물어보기'}<Icon name="right" size={14} stroke={2.4} />

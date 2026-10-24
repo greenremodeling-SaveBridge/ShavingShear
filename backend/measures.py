@@ -153,6 +153,9 @@ SOLAR_3KW = {
     "needs_survey": True,
     "survey_note": "지붕 방향·그늘·구조 하중 확인 필요",
     "days": 3, "vacate_days": 0,
+    "days_note": "설치 1~3일 (참고·업체: 한화큐셀 FAQ)",
+    "start_note": ("한전 상계 신청 후 약 13일(사용전점검일 제외) · 가동은 신청 7일 이후부터 · "
+                   "보조금을 받으면 사업 승인 후 90일 안에 설치 (한전 요금상계 업무처리절차 · 기후에너지환경부 공고 제2026-236호)"),
     "cost_won": [4_540_000, 4_940_000], "subsidy_won": 1_650_000,
     "cost_source": ("2026 신재생에너지 융복합지원사업 설비가격 주택 3kW 1,497천원/kW(부가세 별도, 계산 약 494만 원) · "
                     "예산군 2026 사례 454만 원 · 국비 보조 550천원/kW = 165만 원(한국에너지공단 주택지원)"),
@@ -160,20 +163,24 @@ SOLAR_3KW = {
 
 # 단독주택(132㎡, 2층) 공사비 · 공식 ㎡당 단가가 없는 공사는 업체·연구 단가 × 면적 가정(외벽 174㎡ 중 창 45㎡ · 벽 129㎡)으로 계산
 HOUSE_COST = {
-    "window": {"cost_won": [15_900_000, 25_700_000],
+    "window": {"cost_won": [15_900_000, 25_700_000], "days": 2,
+               "days_note": "1~2일 (참고·업체: LX Z:IN · KCC 대리점). 35평이 넘으면 하루에 못 끝날 수 있음",
                "cost_source": "참고(업체) 도구스 2026 ㎡당 28.5만(로이 이중창)~46만 원(시스템창호) × 철거·부가세 1.232 × 창 45.4㎡(계산)"},
     "envelope": {"cost_won": [4_500_000, 23_500_000],
                  "cost_source": ("내단열 약 3.5만 원/㎡ × 벽 129㎡ = 약 450만 원(마감 제외, 황석호 2022 KIAEBS · 물가정보 단가) ~ "
                                  "참고(업체) 외단열 12.1만~18.2만 원/㎡ × 129㎡ = 약 2,350만 원")},
     "boiler": {"cost_won": [930_000, 2_500_000], "subsidy_won": 0,
+               "days_note": "2~3시간 (참고·업체), 위치를 옮기면 5시간 이상 · 가스 안전점검 후 1일 이내 공급(한국도시가스협회)",
                "cost_source": "LH 토지주택연구원 2022 콘덴싱보일러 933천원/대 ~ 참고(민간) 32평 이상 단독 1등급 220만~250만 원 · 일반가구 보조금 없음(2024~)"},
     "led": {"cost_won": [1_000_000, 2_000_000],
+            "days_note": "등 하나당 15~30분 (참고·업체)",
             "cost_source": "LH 토지주택연구원 2022 LED 1,025천원 ~ 참고(민간) 40평·28개 108만~197만 원"},
 }
 MEASURES_HOUSE = [
     {**m, **HOUSE_COST.get(m["id"], {}),
-     **({"days": 28, "vacate_days": 28, "survey_note": m["survey_note"] + " · 단독주택은 실내 단열을 함께 해 집을 비우는 기간이 생김"}
-        if m["id"] == "envelope" else {"days": 1} if m["id"] == "window" else {})}   # 창호: 업체 발표 원데이 시공
+     **({"days": 28, "vacate_days": 28, "days_note": "가정값 — 외단열·내단열 공사 기간은 공식·업체 자료를 찾지 못함",
+         "survey_note": m["survey_note"] + " · 단독주택은 실내 단열을 함께 해 집을 비우는 기간이 생김"}
+        if m["id"] == "envelope" else {})}
     for m in MEASURES
 ] + [SOLAR_3KW]
 
@@ -376,6 +383,8 @@ def apply_measures(years, selected=None, catalog=None, prices=None):
             "cost_won": m.get("cost_won"),            # [low, high] 이 건물 기준 공사비 · 없으면 None
             "subsidy_won": m.get("subsidy_won"),      # 보조금(원) · 없으면 None
             "cost_source": m.get("cost_source"),
+            "days_note": m.get("days_note"),
+            "start_note": m.get("start_note"),
             "co2_kg_low": round(lo * ef["value"]),
             "co2_kg_high": round(hi * ef["value"]),
             "basis": m["basis"],
