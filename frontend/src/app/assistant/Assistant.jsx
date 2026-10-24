@@ -214,16 +214,23 @@ export function Assistant({ S, variant = 'sheet', onClose, entry, onEnter, onBac
   const pending = a.msgs.some(m => m.pending);
   const answered = a.msgs.filter(m => m.role === 'ai' && m.res && !m.pending).length;
   const [recap, setRecap] = useState(false);
+  // 마지막 질문부터만 펼친다 · 그 전은 「이전 대화」로 접어 둔다 (계속 아래로 쌓이지 않게)
+  const cut = a.msgs.map(m => m.role).lastIndexOf('user');
+  const older = cut > 0 ? a.msgs.slice(0, cut) : [];
+  const recent = cut > 0 ? a.msgs.slice(cut) : a.msgs;
+  const olderN = older.filter(m => m.role === 'user').length || older.length;
+  const [showOld, setShowOld] = useState(false);
 
   // 새 말이 오면 맨 아래를 보여 준다
   const n = a.msgs.length;
   const sig = a.msgs.map(m => (m.pending ? 'p' : 'r')).join('');
   const stick = useRef(true);
+  // 새 말이 오면 최근 질문이 칸 맨 위에서 시작하게 (이전 대화는 접혀 있다)
   useLayoutEffect(() => {
     const el = log.current;
-    if (el) { el.scrollTop = el.scrollHeight; stick.current = true; }
+    if (el) { el.scrollTop = 0; stick.current = false; }
   }, [n, sig]);
-  useEffect(() => { setRecap(false); }, [n]);   // 새로 물으면 대화로 돌아온다
+  useEffect(() => { setRecap(false); setShowOld(false); }, [n]);   // 새로 물으면 대화로 돌아오고 이전 대화는 접는다
   // 맨 아래를 보던 중이면, 내용·입력창 높이가 바뀌어도 맨 아래에 붙어 있게
   useEffect(() => {
     const el = log.current;
@@ -285,7 +292,15 @@ export function Assistant({ S, variant = 'sheet', onClose, entry, onEnter, onBac
         {a.msgs.length === 0
           ? <Hello chips={chipsFor(step)} entry={entry} onPick={pick} />
           : recap ? <Recap msgs={a.msgs} S={S} />
-          : a.msgs.map(m => <Msg key={m.id} m={m} S={S} entry={entry} onEnter={onEnter} />)}
+          : <>
+            {older.length > 0 && (
+              <button type="button" className={cx('as-old', showOld && 'open')} aria-expanded={showOld} onClick={() => setShowOld(v => !v)}>
+                <span>이전 대화 {olderN}개</span><Icon name="down" size={16} />
+              </button>
+            )}
+            {showOld && <div className="as-old-list">{older.map(m => <Msg key={m.id} m={m} S={S} entry={entry} onEnter={onEnter} />)}</div>}
+            {recent.map(m => <Msg key={m.id} m={m} S={S} entry={entry} onEnter={onEnter} />)}
+          </>}
       </div>
       <div className="as-foot">
         {a.msgs.length > 0 && !pending && (
