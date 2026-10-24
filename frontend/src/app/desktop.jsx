@@ -419,7 +419,7 @@ function Suggest({ step, S, top, max = 3 }) {
   );
 }
 
-function AiPanel({ S, go, setMonth, askAi, onHome, showReport, step }) {
+function AiPanel({ S, go, jump, setMonth, askAi, onHome, showReport, step }) {
   const assist = useAssist();
   // 새싹: 답을 기다리면 생각 중 · 고른 분기가 '검증 완료'면 만세
   const cheer0 = usePulse(S.settlement.data?.status_code === 'VERIFIED' ? S.quarterKey : null, 'cheer', 3200, true);
@@ -441,12 +441,9 @@ function AiPanel({ S, go, setMonth, askAi, onHome, showReport, step }) {
   const look = (key, ym) => setPeek({ key, ym });
   // 크게 보기 · 사용자가 누른 이동이라 이때만 왼쪽을 바꾼다
   const big = ({ key, ym }) => {
-    if (!keys.has(key)) { go('base'); return; }
-    if (onHome) { showReport(key, ym); askAi(); return; }   // 홈이면 그 자리에서 왼쪽 정산 리포트를 바꾼다
-    S.setQuarterKey(key);
-    setMonth(ym);
-    askAi();
-    go('setl');
+    if (!keys.has(key)) { jump('base'); return; }
+    if (onHome) { jump(null, () => { showReport(key, ym); askAi(); }); return; }   // 홈이면 그 자리에서 왼쪽 정산 리포트를 바꾼다
+    jump('setl', () => { S.setQuarterKey(key); setMonth(ym); askAi(); });
   };
   const bigLabel = p => (!keys.has(p.key) ? '원래 사용량 예측에서 크게 보기' : onHome ? '홈 리포트에서 크게 보기' : '정산 화면에서 크게 보기');
   return (
@@ -692,16 +689,38 @@ export function DesktopApp({ S }) {
   const [notice, setNotice] = useLocal('ss.notice.v1', true);
   const [sideW, setSideW] = useLocal('ss.side.w2', null);
 
+  // 직접 넘기면(메뉴·이전/다음) 돌아가기 표시는 지운다
+  const [back, setBack] = useState(null);   // { route, y } · AI 쪽 이동 버튼으로 오기 전 자리
   const goStep = id => {
     const g = groupOf(id);
     if (!g) return;
+    setBack(null);
     setRoute({ page: g.id, step: id });
     document.querySelector('.d-main')?.scrollTo(0, 0);
   };
-  const goPage = page => { setRoute({ page, step: null }); document.querySelector('.d-main')?.scrollTo(0, 0); };
+  const goPage = page => { setBack(null); setRoute({ page, step: null }); document.querySelector('.d-main')?.scrollTo(0, 0); };
+  // AI 쪽 「○○ 화면에서 보기」「크게 보기」 · 옮기되 보던 자리를 기억해 돌아갈 수 있게
+  const jump = (id, after) => {
+    const prev = { route, y: document.querySelector('.d-main')?.scrollTop || 0 };
+    if (id) goStep(id);
+    after?.();
+    setBack(prev);
+  };
+  const goBack = () => {
+    if (!back) return;
+    setRoute(back.route);
+    setBack(null);
+    setTimeout(() => document.querySelector('.d-main')?.scrollTo(0, back.y), 80);
+  };
+  // 화면 제목과 같은 이름 (묶음만 골랐으면 그 묶음의 첫 단계)
+  const routeName = r => {
+    if (r.page === 'home') return '홈';
+    const id = r.step || GROUPS.find(g => g.id === r.page)?.steps[0];
+    return id ? stepById(id).name : '이전';
+  };
 
-  // 세이빙 AI 가 화면을 옮길 때 · 오른쪽 대화는 그대로 두고 판만 바꾼다
-  useEffect(() => { a?.bindNav(goStep, route.step || route.page, false, true); }, [route.page, route.step]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 세이빙 AI 가 화면을 옮길 때 · 오른쪽 대화는 그대로 두고 판만 바꾼다 (이동 버튼을 누른 것만 · 돌아가기 가능)
+  useEffect(() => { a?.bindNav((id, opt) => (opt?.explicit ? jump(id) : goStep(id)), route.step || route.page, false, true); }); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const k = e => {
@@ -720,6 +739,14 @@ export function DesktopApp({ S }) {
           <Nav page={route.page} goPage={goPage} onSearch={() => setSheet('search')} />
           {notice && <div className="d-notice-row"><Notice onOpen={() => setSheet('basis')} onClose={() => setNotice(false)} /></div>}
           <div className="d-page">
+            {back && (
+              <div className="d-back soft-in" role="navigation" aria-label="돌아가기">
+                <button type="button" className="d-back-go" onClick={goBack}><Icon name="left" size={18} />
+                  {back.route.page === route.page && back.route.step === route.step ? '보던 자리로 돌아가기' : `${routeName(back.route)} 화면으로 돌아가기`}
+                </button>
+                <button type="button" className="icon-btn" aria-label="돌아가기 닫기" onClick={() => setBack(null)}><Icon name="close" size={16} /></button>
+              </div>
+            )}
             <section className="panel" aria-label={route.page === 'home' ? '홈' : undefined}>
               <PanelStatus S={S} onAbout={() => goStep('sys')} />
               {route.page === 'home'
@@ -737,7 +764,7 @@ export function DesktopApp({ S }) {
         ) : side && (
           <aside className="d-side" aria-label={side === 'ai' ? 'AI 설명' : '내 건물'} style={sideW ? { width: sideW } : undefined}>
             {side === 'ai'
-              ? <AiPanel S={S} go={goStep} setMonth={setMonth} askAi={askAi} onHome={route.page === 'home'} showReport={showReport}
+              ? <AiPanel S={S} go={goStep} jump={jump} setMonth={setMonth} askAi={askAi} onHome={route.page === 'home'} showReport={showReport}
                   step={route.step || (route.page === 'home' ? 'bld' : GROUPS.find(g => g.id === route.page)?.steps[0])} />
               : <BldPanel S={S} onSearch={() => setSheet('search')} />}
           </aside>

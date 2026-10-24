@@ -1394,3 +1394,9 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 .as-recap-a { font-size: 15px; line-height: 23px; font-weight: 600; color: var(--text-1); }
 .as-recap-a .as-tag { margin-right: 6px; vertical-align: 1px; }
 .as-recap-f { font-size: 13px; line-height: 19px; color: var(--text-2); }
+
+/* ══ AI 쪽 이동 버튼으로 넘어왔을 때 · 보던 화면으로 돌아가기 ══ */
+.d-back { max-width: 1240px; margin: 0 auto 10px; display: flex; align-items: center; gap: 4px; }
+.d-back-go { display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 14px 0 10px; border-radius: 999px; background: var(--text-1); color: var(--surface); font-size: 14px; font-weight: 700; transition: filter 0.15s; }
+.d-back-go:hover { filter: brightness(1.15); }
+.d-back .icon-btn { width: 32px; height: 32px; color: var(--text-3); }
