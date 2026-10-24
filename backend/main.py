@@ -863,10 +863,10 @@ def get_measures(bld_id: int = 1, ids: str = ""):
 # ══════════════════════════════════════════════════════
 #  ⑥ 혜택 정리 (단독주택)  — 2026-10-24 회의
 #    세입자: 줄어든 요금 그대로 · 집 비우는 기간은 관리비 할인(협의)
-#    건물주: 건물 가치 상승 + 이자지원  (절감액을 나눠 갖지 않는다)
+#    건물주: 공사비 부담 + 지원사업(이자지원·BRP)  (2026-10-24 건물 가치 이야기는 뺌)
 # ══════════════════════════════════════════════════════
 @app.get("/api/benefit")
-def get_benefit(bld_id: int = 1, ids: str = "", property_won: int = 0):
+def get_benefit(bld_id: int = 1, ids: str = ""):
     m = get_measures(bld_id, ids)
     if not m.get("available"):
         return {"bld_id": bld_id, "available": False, "reason": m.get("reason")}
@@ -906,9 +906,10 @@ def get_benefit(bld_id: int = 1, ids: str = "", property_won: int = 0):
                      if sch["vacate_days"] else "집을 비우는 공사가 없어요. 사는 채로 공사할 수 있어요."),
         },
         "owner": {
-            "value": benefit_mod.value_gain(property_won),
+            "cost": m.get("total_cost"),
             "programs": el["programs"],
-            "note": "건물주는 절감액을 나눠 갖지 않습니다. 건물 가치 상승과 이자지원이 건물주의 이득입니다.",
+            "support": [benefit_mod.SUPPORT[p] for p in el["programs"] if p in benefit_mod.SUPPORT],
+            "note": "공사비는 건물주가 내고, 지원사업으로 이자 부담을 줄여요.",
         },
         "data_origin": data_origin(bld_id),
     }

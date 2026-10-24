@@ -4,10 +4,10 @@
    홈이든 단계든 같은 판, 같은 제목 자리, 같은 줄 모양을 쓴다.
    ══════════════════════════════════════════════════════════════ */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { cx, won, kwh, pct, pct1, ymTxt, firstSentence, koMoney, manwon, manRange } from '../core/format.js';
+import { cx, won, kwh, pct, pct1, ymTxt, firstSentence, koMoney, manwon, manRange, costTxt } from '../core/format.js';
 import { hasAmount, fetchSettlement, fetchExplain } from '../core/domain.js';
 import { useResource, usePersistent, useTheme } from '../core/hooks.js';
-import { AmountField, BuddyBody, BuddyFace, Badge, BrandMark, Button, ErrorBox, Icon, Row, Sheet, Skeleton, Stepper, connInfo, monthBadge, statusText, usePulse } from './ui.jsx';
+import { BuddyBody, BuddyFace, Badge, BrandMark, Button, ErrorBox, Icon, Row, Sheet, Skeleton, connInfo, monthBadge, statusText, usePulse } from './ui.jsx';
 import { MiniBars, MiniChecks, MiniLines, MiniRange, MiniSplit, dataSpan } from './charts.jsx';
 import {
   BasisRows, CalcMethod, GROUPS, RatioControl, STEPS, ShellProvider, StepView, baselineFail, baselinePass, groupOf, pctRange, stepById, stepIndex, tidy,
@@ -17,7 +17,6 @@ import { useAssist, useJumpBack } from './assistant/context.js';
 import { Assistant } from './assistant/Assistant.jsx';
 import { AskLink } from './assistant/Nudge.jsx';
 import { chipOf, chipsFor, saveMe } from '../core/assist.js';
-import { INVEST, PROPERTY } from '../core/useSavingShare.js';
 import { ViewSetting } from './viewMode.jsx';
 
 const NAV = [{ id: 'home', name: '홈' }, ...GROUPS.filter(g => g.id !== 'sys').map(g => ({ id: g.id, name: g.name }))];
@@ -56,57 +55,29 @@ function Nav({ goPage }) {
 }
 
 /* ── 지금 조건 · 판 맨 위에 늘 보이고, 숫자를 누르면 그 자리에서 바꾼다 (모든 단계 계산에 바로 반영) ── */
-const COND = [['invest', '공사비'], ['property', '집값'], ['sched', '공사 일정']];
+/* 공사비·공사 일정은 4단계에서 켠 공사로 정해진다 → 칩을 누르면 4단계로 (가면 그 자리가 이전 화면 버튼) */
+const COND = [['cost', '공사비'], ['sched', '공사 일정']];
 function CondBar({ S, go, here }) {
-  const [open, setOpen] = useState(null);
   const jb = useJumpBack();
-  const box = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const away = e => { if (!box.current?.contains(e.target)) setOpen(null); };
-    const esc = e => { if (e.key === 'Escape') setOpen(null); };
-    document.addEventListener('pointerdown', away, true);
-    window.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('pointerdown', away, true); window.removeEventListener('keydown', esc); };
-  }, [open]);
   const bn = S.benefit.data?.available ? S.benefit.data : null;
   const sch = bn?.schedule;
   const val = {
-    invest: <b className="num">{koMoney(S.invest)}</b>,
-    property: <b className="num">{koMoney(S.property)}</b>,
+    cost: <b className="num">{(bn && costTxt(bn.owner.cost)) || '—'}</b>,
     sched: <b className="num">{sch ? `${sch.total_days}일${sch.vacate_days ? ` · 비움 ${sch.vacate_days}일` : ''}` : '—'}</b>,
   };
-  const to = { invest: 'alloc', property: 'alloc', sched: 'meas' };
   return (
-    <div className="cond" ref={box} role="group" aria-label="지금 조건">
+    <div className="cond" role="group" aria-label="지금 조건">
       {COND.map(([k, name]) => (
         <div key={k} className="cond-i">
-          <div className={cx('cond-chip', open === k && 'on')}>
-            {/* ① 바로 바꾸기 (공사 일정은 4단계에서 공사를 골라 바꾼다) */}
-            <button type="button" className="cond-v" aria-expanded={k === 'sched' ? undefined : open === k} aria-label={`${name} ${k === 'sched' ? '' : '바로 바꾸기'}`}
-              onClick={() => (k === 'sched' ? (jb.mark(k), go('meas')) : setOpen(o => (o === k ? null : k)))}>
-              <span className="cond-k">{name}</span>{val[k]}{k !== 'sched' && <Icon name="sliders" size={14} />}
-            </button>
-            {/* ② 그 화면에 가서 바꾸기 · 가면 그 자리가 이전 화면 버튼이 된다 */}
+          <div className="cond-chip">
+            <span className="cond-v"><span className="cond-k">{name}</span>{val[k]}</span>
             {jb.on && jb.which === k
               ? <button type="button" className="cond-go back" aria-label="이전 화면" title="이전 화면" onClick={jb.back}><Icon name="left" size={14} /></button>
-              : here !== to[k] && (
-                <button type="button" className="cond-go" aria-label={`${name} 화면에서 바꾸기`} title={`${stepById(to[k]).name}에서 보기`}
-                  onClick={() => { setOpen(null); jb.mark(k); go(to[k]); }}><Icon name="right" size={14} /></button>
+              : here !== 'meas' && (
+                <button type="button" className="cond-go" aria-label={`${name} 바꾸기 · 추천 공사로`} title="추천 공사에서 바꾸기"
+                  onClick={() => { jb.mark(k); go('meas'); }}><Icon name="right" size={14} /></button>
               )}
           </div>
-          {open === k && (
-            <div className="cond-pop soft-in" role="dialog" aria-label={`${name} 바꾸기`}>
-              {k === 'invest' && <AmountField label="공사비" value={S.invest} min={INVEST.min} max={INVEST.max} onChange={v => { if (v != null && v !== S.invest) S.setInvest(v); }} />}
-              {k === 'property' && <AmountField label="집값(시세)" value={S.property} min={PROPERTY.min} max={PROPERTY.max} onChange={v => { if (v != null && v !== S.property) S.setProperty(v); }} />}
-              {bn && (
-                <p className="cond-out num">
-                  세입자 매달 {won(bn.tenant.monthly_won[0])}~{won(bn.tenant.monthly_won[1])}원
-                  {bn.owner.value.gain_won && <>{' · '}건물 가치 +{koMoney(bn.owner.value.gain_won[0])}~{koMoney(bn.owner.value.gain_won[1])}</>}
-                </p>
-              )}
-            </div>
-          )}
         </div>
       ))}
     </div>
@@ -251,7 +222,6 @@ function StartGuide({ go, onSearch, onClose }) {
 /* 열자마자 보이는 한 장 · 이 건물에서 얼마를 아낄 수 있는지 + 어디부터 보면 되는지 */
 function HomeHero({ S, go }) {
   const bn = S.benefit.data?.available ? S.benefit.data : null;
-  const v = bn?.owner.value;
   const STEP4 = [['bld', '건물 확인', '주소와 면적'], ['meas', '공사 고르기', '공사별 절감·기간'], ['alloc', '이득 확인', '세입자와 건물주'], ['draft', '계약서', '조항 확인']];
   return (
     <section className="hero" aria-label="한눈에 보기">
@@ -263,7 +233,7 @@ function HomeHero({ S, go }) {
         {bn && (
           <div className="hero-who">
             <span>집 비우는 기간 <b className="num">{bn.schedule.vacate_days ? `약 ${bn.schedule.vacate_days}일` : '없음'}</b></span>
-            <span>건물주 <b className="num">{v.gain_won ? `가치 +${koMoney(v.gain_won[0])}~${koMoney(v.gain_won[1])}` : `가치 +${pctRange(...v.rate_range)}`}</b></span>
+            <span>공사비 <b className="num">{costTxt(bn.owner.cost) || '—'}</b></span>
           </div>
         )}
       </div>
@@ -449,7 +419,6 @@ function BenPeek({ S, onClose, onBig }) {
   const jb = useJumpBack();
   const d = S.benefit.data;
   if (!d?.available) return null;
-  const v = d.owner.value;
   return (
     <section className="peek soft-in" aria-label="이득 요약">
       <div className="peek-h">
@@ -460,7 +429,7 @@ function BenPeek({ S, onClose, onBig }) {
       <div className="rows lined peek-rows">
         <Row k="세입자" v={`매달 ${won(d.tenant.monthly_won[0])}~${won(d.tenant.monthly_won[1])}원`} strong />
         <Row k="집 비우는 기간" v={d.schedule.vacate_days ? `약 ${d.schedule.vacate_days}일 · 관리비 할인` : '없음'} />
-        <Row k="건물주" v={v.gain_won ? `가치 +${koMoney(v.gain_won[0])}~${koMoney(v.gain_won[1])}` : `가치 +${pctRange(...v.rate_range)}`} />
+        <Row k="공사비" v={costTxt(d.owner.cost) || '—'} />
       </div>
       <div className="peek-act">
         {jb.on

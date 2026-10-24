@@ -80,21 +80,23 @@ def basis(annual_elec, annual_gas):
 PRICES_HOUSE = {
     "elec": {
         "name": "전기",
-        "won_per_kwh": 150,
+        "won_per_kwh": 156.91,
         "unit": "원/kWh",
-        "is_assumption": True,
-        "verified": False,
-        "source": "주택용 저압 요금 대표값 (출처 확인 중)",
-        "to_verify": "누진 구간·기본요금·부가세에 따라 실제 단가가 달라짐",
+        "is_assumption": False,
+        "verified": True,
+        # 2단계 한계단가(214.6+9+5=228.6원)는 절감 후에도 2단계에 머물 때만 맞다. 단독주택(서울 연 2,834kWh)에
+        # 태양광까지 달면 사용량이 거의 0이 되어 228.6원은 약 47% 부풀린다. 평균 판매단가가 실제 요금 차이에 더 가깝다.
+        "source": "한전 주택용 평균 판매단가 156.91원/kWh (2024년 한국전력통계, 2025.05)",
+        "to_verify": "누진 구간·기본요금·부가세·전력기금에 따라 실제 절감액은 달라짐",
     },
     "gas": {
         "name": "도시가스",
-        "won_per_kwh": 80,
+        "won_per_kwh": 81.10,
         "unit": "원/kWh",
-        "is_assumption": True,
-        "verified": False,
-        "source": "주택난방용 도시가스 요금 대표값 (출처 확인 중)",
-        "to_verify": "기본요금·부가세 제외",
+        "is_assumption": False,
+        "verified": True,
+        "source": "서울도시가스 주택용 22.5268원/MJ × 3.6 MJ/kWh (2026.10.1 요금표, 부가세 별도)",
+        "to_verify": "기본요금(월 1,250원)·부가세 제외",
     },
 }
 

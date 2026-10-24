@@ -132,9 +132,9 @@ export const fetchMeasures = (id, ids) =>
     return d;
   });
 
-/* 혜택 정리 · 세입자(줄어든 요금) · 집 비우는 기간 · 건물주(건물 가치) — 금액은 서버 계산 그대로 */
-export const fetchBenefit = (id, ids, property) =>
-  api(`/api/benefit?bld_id=${id}${ids ? '&ids=' + ids.join(',') : ''}${property ? '&property_won=' + Math.round(property) : ''}`)
+/* 혜택 정리 · 세입자(줄어든 요금) · 집 비우는 기간 · 건물주(공사비·지원) — 금액은 서버 계산 그대로 */
+export const fetchBenefit = (id, ids) =>
+  api(`/api/benefit?bld_id=${id}${ids ? '&ids=' + ids.join(',') : ''}`)
     .then(d => need(d, ['available'], '혜택'));
 
 export const fetchBaseline = id =>

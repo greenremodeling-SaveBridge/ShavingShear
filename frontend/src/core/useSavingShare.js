@@ -14,7 +14,6 @@ export const RATIO = { min: RATIO_MIN, max: RATIO_MAX, step: RATIO_STEP, snap: r
 const exact = r => +Math.min(RATIO_MAX, Math.max(RATIO_MIN, r)).toFixed(3);
 export const INVEST = { min: 1_000_000, max: 10_000_000_000 };
 export const YEARS = { min: 1, max: 30 };
-export const PROPERTY = { min: 10_000_000, max: 100_000_000_000, init: 500_000_000 };   // 집값(시세, 원)
 
 export function useSavingShare({ autoLookup = true } = {}) {
   const conn = useClient();
@@ -34,9 +33,6 @@ export function useSavingShare({ autoLookup = true } = {}) {
   // 세이빙 AI: 누구 관점으로 설명할지 (숫자는 같고 문장만 바뀐다) · 특약을 AI 가 채웠는지
   const [viewer, setViewer] = usePersistent('ss.viewer', 'owner', v => (v === 'tenant' ? 'tenant' : 'owner'));
   const [aiDraft, setAiDraft] = usePersistent('ss.aiDraft', false, v => v === true);
-  // 집값(시세) · 건물주 이득(건물 가치 상승)을 원으로 보여줄 때만 쓴다
-  const [property, setProperty] = usePersistent('ss.property', PROPERTY.init,
-    v => (Number.isFinite(v) && v >= PROPERTY.min && v <= PROPERTY.max ? Math.round(v) : PROPERTY.init));
 
   const setRatio = useCallback(r => setRatioRaw(RATIO.snap(r)), [setRatioRaw]);
   const setRatioExact = useCallback(r => setRatioRaw(exact(r)), [setRatioRaw]);
@@ -98,8 +94,7 @@ export function useSavingShare({ autoLookup = true } = {}) {
   const profile = useResource(['profile', nonce], () => fetchProfile(id), { enabled: on });
   const pickedKey = picked ? picked.join(',') : 'ALL';
   const measures = useResource(['meas', nonce, pickedKey], () => fetchMeasures(id, picked), { enabled: on, keep: true });
-  const dProperty = useDebounced(property, 300);
-  const benefit = useResource(['benefit', nonce, pickedKey, dProperty], () => fetchBenefit(id, picked, dProperty), { enabled: on, keep: true });
+  const benefit = useResource(['benefit', nonce, pickedKey], () => fetchBenefit(id, picked), { enabled: on, keep: true });
   // 서버는 고른 대책만 돌려준다 → 전부 고른 상태의 목록을 기억해 두고, 끈 대책도 목록에 남겨 다시 켤 수 있게
   const allMeas = useRef(null);
   if (!picked && measures.data?.measures) allMeas.current = measures.data.measures;
@@ -152,6 +147,6 @@ export function useSavingShare({ autoLookup = true } = {}) {
     eligibility, profile, measures, baseline, allocation,
     cases, caseItems, quarterKey, setQuarterKey, qSel, settlement, explain, target,
     picked, toggleMeasure, resetDemoConditions, measureList: allMeas.current,
-    sim, viewer, setViewer, aiDraft, setAiDraft, property, setProperty, benefit,
+    sim, viewer, setViewer, aiDraft, setAiDraft, benefit,
   };
 }

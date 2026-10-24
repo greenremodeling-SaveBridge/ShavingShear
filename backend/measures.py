@@ -147,16 +147,16 @@ SOLAR_3KW = {
     "name": "태양광 설치 (3kW)",
     "target": "elec",
     "addresses": "전기 사용량(자가 발전)",
-    "fixed_kwh": [3300, 3900],          # ← 출처 확인 후 교체
-    "basis": "assumed",
-    "source": "주택용 3kW 연간 발전량 대표값 (출처 확인 중)",
+    "fixed_kwh": [3456, 3456],          # 288kWh/월 × 12
+    "basis": "reference",
+    "source": "서울시 주택 태양광 산식 3kW × 3.2시간 × 30일 = 월 288kWh (내 손안에 서울, 2020.4.14)",
     "needs_survey": True,
     "survey_note": "지붕 방향·그늘·구조 하중 확인 필요",
     "days": 3, "vacate_days": 0,
 }
 MEASURES_HOUSE = [
     {**m, **({"days": 28, "vacate_days": 28, "survey_note": m["survey_note"] + " · 단독주택은 실내 단열을 함께 해 집을 비우는 기간이 생김"}
-             if m["id"] == "envelope" else {})}
+             if m["id"] == "envelope" else {"days": 1} if m["id"] == "window" else {})}   # 창호: 업체 발표 원데이 시공
     for m in MEASURES
 ] + [SOLAR_3KW]
 
@@ -356,6 +356,9 @@ def apply_measures(years, selected=None, catalog=None, prices=None):
             "saving_won_high": round(hi * price[m["target"]]),
             "days": m.get("days"),
             "vacate_days": m.get("vacate_days", 0),
+            "cost_won": m.get("cost_won"),            # [low, high] 이 건물 기준 공사비 · 없으면 None
+            "subsidy_won": m.get("subsidy_won"),      # 보조금(원) · 없으면 None
+            "cost_source": m.get("cost_source"),
             "co2_kg_low": round(lo * ef["value"]),
             "co2_kg_high": round(hi * ef["value"]),
             "basis": m["basis"],
@@ -421,6 +424,10 @@ def apply_measures(years, selected=None, catalog=None, prices=None):
     }
     won_lo = sum(t["saving_won_low"] for t in totals.values())
     won_hi = sum(t["saving_won_high"] for t in totals.values())
+    costed = [r for r in rows if r["cost_won"]]
+    cost = ({"low": sum(r["cost_won"][0] for r in costed), "high": sum(r["cost_won"][1] for r in costed),
+             "subsidy": sum(r["subsidy_won"] or 0 for r in costed),
+             "missing": [r["name"] for r in rows if not r["cost_won"]]} if costed else None)
 
     return {
         "available": True,
@@ -428,6 +435,7 @@ def apply_measures(years, selected=None, catalog=None, prices=None):
         "base_elec_kwh": base["elec"],
         "base_gas_kwh": base["gas"],
         "total_saving_won": [won_lo, won_hi],
+        "total_cost": cost,
         "prices": prices,
         "schedule": schedule,
         "base_total_kwh": base["total"],

@@ -19,7 +19,9 @@ export const firstSentence = t => {
 };
 /** 87만 25원 → '87만' · 요약 자리에서 만 원 단위로만 보여준다 (값은 서버 그대로, 반올림 표시) */
 export const manwon = n => (isNum(n) ? `${Math.round(Number(n) / 1e4).toLocaleString('ko-KR')}만` : '—');
-export const manRange = (a, b) => `${manwon(a)}~${manwon(b)} 원`;
+export const manRange = (a, b) => (a === b ? `${manwon(a)} 원` : `${manwon(a)}~${manwon(b)} 원`);
+/* 공사비 합계 {low, high} → '1,200만~1,800만 원' · 없으면 null */
+export const costTxt = c => (c ? manRange(c.low, c.high) : null);
 export const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 export const cx = (...a) => a.filter(Boolean).join(' ');
 
