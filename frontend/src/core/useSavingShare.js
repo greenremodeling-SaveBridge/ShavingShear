@@ -94,6 +94,9 @@ export function useSavingShare({ autoLookup = true } = {}) {
   const profile = useResource(['profile', nonce], () => fetchProfile(id), { enabled: on });
   const pickedKey = picked ? picked.join(',') : 'ALL';
   const measures = useResource(['meas', nonce, pickedKey], () => fetchMeasures(id, picked), { enabled: on, keep: true });
+  // 서버는 고른 대책만 돌려준다 → 전부 고른 상태의 목록을 기억해 두고, 끈 대책도 목록에 남겨 다시 켤 수 있게
+  const allMeas = useRef(null);
+  if (!picked && measures.data?.measures) allMeas.current = measures.data.measures;
   const baseline = useResource(['base', nonce], () => fetchBaseline(id), { enabled: on });
 
   const dInvest = useDebounced(invest, 250);
@@ -142,7 +145,7 @@ export function useSavingShare({ autoLookup = true } = {}) {
     invest, setInvest, ratio, setRatio, setRatioExact, years, setYears,
     eligibility, profile, measures, baseline, allocation,
     cases, caseItems, quarterKey, setQuarterKey, qSel, settlement, explain, target,
-    picked, toggleMeasure, resetDemoConditions,
+    picked, toggleMeasure, resetDemoConditions, measureList: allMeas.current,
     sim, viewer, setViewer, aiDraft, setAiDraft,
   };
 }

@@ -224,16 +224,17 @@ function MeasView({ S }) {
   const d = r.data;
   if (!d.available) return <StepLayout title="개선 대책을 계산할 수 없어요" main={d.reason ? <p className="t-b">{tidy(d.reason)}</p> : null} />;
   const live = S.conn.mode !== 'backup';
-  const all = d.measures.map(m => m.id);
+  const list = S.measureList || d.measures;   // 끈 대책도 남아 있는 전체 목록
+  const all = list.map(m => m.id);
   const sel = S.picked ?? all;
   const [klo, khi] = d.total_saving_kwh;
   const [rlo, rhi] = d.total_saving_rate || [];
   const [nlo, nhi] = d.naive_sum_kwh;
   const [olo, ohi] = d.overlap_adjust_kwh;
   const [clo, chi] = d.total_co2_kg;
-  const labels = [...new Set(d.measures.map(m => m.basis_label || '시나리오 가정값'))];
-  const missAll = d.measures.every(m => m.source_missing);
-  const uniform = labels.length === 1 && (missAll || d.measures.every(m => !m.source_missing));
+  const labels = [...new Set(list.map(m => m.basis_label || '시나리오 가정값'))];
+  const missAll = list.every(m => m.source_missing);
+  const uniform = labels.length === 1 && (missAll || list.every(m => !m.source_missing));
   const efOpen = Object.values(d.emission_factors || {}).some(f => f && f.verified === false);
   return (
     <StepLayout eyebrow={<Badge tone="gray" lg>가정으로 계산한 값</Badge>}
@@ -244,13 +245,13 @@ function MeasView({ S }) {
           <div>
             {uniform && (
               <div className="ms-tags">
-                <span>{d.measures.length}개 모두</span>
+                <span>{list.length}개 모두</span>
                 <Badge>{labels[0]}</Badge>
                 {missAll && <Badge tone="red">출처 확인 중</Badge>}
               </div>
             )}
             <ul className="ms-list">
-              {d.measures.map(m => {
+              {list.map(m => {
                 const on = sel.includes(m.id);
                 const rr = m.rate_range || [];
                 return (
