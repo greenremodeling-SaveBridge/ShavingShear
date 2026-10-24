@@ -4,19 +4,20 @@
    홈이든 단계든 같은 판, 같은 제목 자리, 같은 줄 모양을 쓴다.
    ══════════════════════════════════════════════════════════════ */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { cx, won, kwh, pct, ymTxt, firstSentence } from '../core/format.js';
+import { cx, won, kwh, pct, pct1, ymTxt, firstSentence, koMoney } from '../core/format.js';
 import { hasAmount, fetchSettlement, fetchExplain } from '../core/domain.js';
 import { useResource, usePersistent, useTheme } from '../core/hooks.js';
-import { BuddyBody, BuddyFace, Badge, BrandMark, Button, ErrorBox, Icon, Row, Sheet, Skeleton, connInfo, monthBadge, statusText, usePulse } from './ui.jsx';
+import { AmountField, BuddyBody, BuddyFace, Badge, BrandMark, Button, ErrorBox, Icon, Row, Sheet, Skeleton, Stepper, connInfo, monthBadge, statusText, usePulse } from './ui.jsx';
 import { MiniBars, MiniChecks, MiniLines, MiniRange, MiniSplit, dataSpan } from './charts.jsx';
 import {
-  BasisRows, GROUPS, STEPS, ShellProvider, StepView, baselineFail, baselinePass, groupOf, pctRange, stepById, stepIndex, tidy,
+  BasisRows, GROUPS, RatioControl, STEPS, ShellProvider, StepView, baselineFail, baselinePass, groupOf, pctRange, stepById, stepIndex, tidy,
 } from './steps.jsx';
 import { Picker, usePicker } from './entry.jsx';
 import { useAssist, useJumpBack } from './assistant/context.js';
 import { Assistant } from './assistant/Assistant.jsx';
 import { AskLink } from './assistant/Nudge.jsx';
 import { chipOf, chipsFor, saveMe } from '../core/assist.js';
+import { INVEST, YEARS } from '../core/useSavingShare.js';
 import { ViewSetting } from './viewMode.jsx';
 
 const NAV = [{ id: 'home', name: '홈' }, ...GROUPS.filter(g => g.id !== 'sys').map(g => ({ id: g.id, name: g.name }))];
@@ -67,21 +68,81 @@ function Nav({ page, goPage, onSearch, onNotice }) {
   );
 }
 
+/* ── 지금 조건 · 판 맨 위에 늘 보이고, 숫자를 누르면 그 자리에서 바꾼다 (모든 단계 계산에 바로 반영) ── */
+const COND = [['ratio', '나눌 비율', ''], ['years', '분배 기간', '기간'], ['invest', '공사비', '공사비']];   // 키 · 이름 · 칩에 붙는 짧은 이름
+function CondBar({ S, go, here }) {
+  const [open, setOpen] = useState(null);
+  const jb = useJumpBack();
+  const box = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const away = e => { if (!box.current?.contains(e.target)) setOpen(null); };
+    const esc = e => { if (e.key === 'Escape') setOpen(null); };
+    document.addEventListener('pointerdown', away, true);
+    window.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', away, true); window.removeEventListener('keydown', esc); };
+  }, [open]);
+  const manual = () => { if (S.aiDraft) S.setAiDraft(false); };   // 직접 바꾸면 더는 'AI가 정리한 문안'이 아니다
+  const val = {
+    ratio: <>건물주 <b className="num">{pct1(S.ratio)}</b> · 임차인 <b className="num">{pct1(1 - S.ratio)}</b></>,
+    years: <b className="num">{S.years}년</b>,
+    invest: <b className="num">{koMoney(S.invest)}</b>,
+  };
+  return (
+    <div className="cond" ref={box} role="group" aria-label="지금 조건">
+      {COND.map(([k, name, short]) => (
+        <div key={k} className="cond-i">
+          <div className={cx('cond-chip', open === k && 'on')}>
+            {/* ① 바로 바꾸기 (칩을 눌러도 같음) */}
+            <button type="button" className="cond-v" aria-expanded={open === k} aria-label={`${name} 바로 바꾸기`}
+              onClick={() => setOpen(o => (o === k ? null : k))}>
+              {short && <span className="cond-k">{short}</span>}{val[k]}<Icon name="sliders" size={14} />
+            </button>
+            {/* ② 분배 화면에 가서 바꾸기 · 가면 그 자리가 이전 화면 버튼이 된다 */}
+            {jb.on && jb.which === k
+              ? <button type="button" className="cond-go back" aria-label="이전 화면" title="이전 화면" onClick={jb.back}><Icon name="left" size={14} /></button>
+              : here !== 'alloc' && (
+                <button type="button" className="cond-go" aria-label={`분배 화면에서 ${name} 바꾸기`} title="분배 화면에서 바꾸기"
+                  onClick={() => { setOpen(null); jb.mark(k); go('alloc'); }}><Icon name="right" size={14} /></button>
+              )}
+          </div>
+          {open === k && (
+            <div className="cond-pop soft-in" role="dialog" aria-label={`${name} 바꾸기`}>
+              {k === 'ratio' && <RatioControl S={S} need={S.allocation.data?.required_owner_ratio} onSettle={manual} />}
+              {k === 'years' && <Stepper label="분배 기간" value={S.years} min={YEARS.min} max={YEARS.max} unit="년" onChange={v => { S.setYears(v); manual(); }} />}
+              {k === 'invest' && <AmountField label="공사비" value={S.invest} min={INVEST.min} max={INVEST.max} onChange={v => { if (v != null && v !== S.invest) { S.setInvest(v); manual(); } }} />}
+              {S.allocation.data && (
+                <p className="cond-out num">
+                  건물주 {S.allocation.data.payback_years != null ? `${S.allocation.data.payback_years}년에 회수` : '회수 어려움'}
+                  {' · '}세입자 매달 {won(S.allocation.data.tenant_monthly_won)}원
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── 판 맨 위 상태 줄 ── */
-function PanelStatus({ S, onAbout, lead }) {
+function PanelStatus({ S, onAbout, lead }) {  // lead: 돌아가기 · 지금 조건
   const c = connInfo(S.conn);
   const span = dataSpan(S.baseline.data?.monthly_baseline);
   return (
     <div className="p-status">
       {lead}
-      {span && <span className="dot green"><i /><b>공공데이터</b> {ymTxt(span.last)}까지 반영</span>}
-      <span className={cx('dot', c.tone)} role="status">
-        <i />
-        {S.conn.mode === 'backup' ? <><b>저장된 시연 데이터</b> · {S.conn.stampTime} 기준</> : <b>{c.text}</b>}
+      {/* 조건이 들어가 한 줄을 지키려고 상태는 짧게 (자세한 말은 title) */}
+      <span className="p-dots">
+        {span && <span className="dot green" title={`공공데이터 ${ymTxt(span.last)}까지 반영`}><i />{ymTxt(span.last)}까지</span>}
+        <span className={cx('dot', c.tone)} role="status" title={c.text}>
+          <i />
+          {S.conn.mode === 'backup' ? <><b>저장된 시연 데이터</b> · {S.conn.stampTime} 기준</> : c.tone === 'green' ? <span className="sr">{c.text}</span> : <b>{c.text}</b>}
+        </span>
       </span>
       {c.action && <Button variant="weak" size="s" onClick={c.action.run}>{c.action.label}</Button>}
       {S.sim && <span className="p-sim" role="note"><b>가상 데이터 · 시연용</b><span>{S.sim.note || '실제 사용량이 아니에요'}</span></span>}
-      <button type="button" className="ai-intro" onClick={onAbout}><Icon name="sparkle" size={16} />세이빙 셰어 AI 소개</button>
+      <button type="button" className="ai-intro icon" onClick={onAbout} title="세이빙 셰어 AI 소개" aria-label="세이빙 셰어 AI 소개"><Icon name="sparkle" size={16} /></button>
     </div>
   );
 }
@@ -749,14 +810,15 @@ export function DesktopApp({ S }) {
           <Nav page={route.page} goPage={goPage} onSearch={() => setSheet('search')} onNotice={() => setSheet('basis')} />
           <div className="d-page">
             <section className="panel" aria-label={route.page === 'home' ? '홈' : undefined}>
-              <PanelStatus S={S} onAbout={() => goStep('sys')} lead={back && (
+              <PanelStatus S={S} onAbout={() => goStep('sys')} lead={<>{back && (
                 <div className="d-back soft-in" role="navigation" aria-label="돌아가기">
-                  <button type="button" className="d-back-go" onClick={goBack}><Icon name="left" size={18} />
-                    {sid(back.route) === sid(route) ? '보던 자리로 돌아가기' : `${routeName(back.route)} 화면으로 돌아가기`}
+                  <button type="button" className="d-back-go" onClick={goBack}
+                    title={sid(back.route) === sid(route) ? '보던 자리로 돌아가기' : `${routeName(back.route)} 화면으로 돌아가기`}>
+                    <Icon name="left" size={18} />이전 · {sid(back.route) === sid(route) ? '보던 자리' : routeName(back.route)}
                   </button>
                   <button type="button" className="icon-btn" aria-label="돌아가기 닫기" onClick={() => setHist([])}><Icon name="close" size={16} /></button>
                 </div>
-              )} />
+              )}<CondBar S={S} go={goStep} here={route.step || (route.page === 'home' ? 'home' : GROUPS.find(g => g.id === route.page)?.steps[0])} /></>} />
               {route.page === 'home'
                 ? <Home S={S} go={goStep} onSearch={() => setSheet('search')} tab={htab} setTab={setHtab} focus={focus} />
                 : <Category S={S} route={route} go={goStep} goPage={goPage} onSearch={() => setSheet('search')} />}

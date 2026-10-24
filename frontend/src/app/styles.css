@@ -1569,3 +1569,30 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 .ch-band.train { fill: var(--blue-weak); }
 .ch-band.valid { fill: var(--amber-weak); }
 .ch-band.post { fill: var(--primary-weak); }
+
+/* ══ 지금 조건 · 판 맨 위 (누르면 그 자리에서 바꾸기) ══ */
+.cond { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.cond-i { position: relative; }
+.cond-chip { display: inline-flex; align-items: center; height: 34px; border-radius: 999px; background: var(--primary-weak); color: var(--text-1); font-size: 14px; white-space: nowrap; transition: background 0.15s, box-shadow 0.15s; }
+.cond-v { display: inline-flex; align-items: center; gap: 6px; height: 100%; padding: 0 8px 0 12px; border-radius: 999px; }
+.cond-go { display: grid; place-items: center; width: 26px; height: 26px; margin-right: 4px; border-radius: 50%; background: var(--surface); color: var(--text-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+.cond-go:hover { background: var(--fill); color: var(--text-1); }
+.cond-go.back { background: var(--text-1); color: var(--surface); box-shadow: none; }
+.cond-chip b { font-weight: 800; color: var(--primary-text); }
+.cond-k { font-size: 12px; font-weight: 700; color: var(--text-3); }
+.cond-v > svg { color: var(--primary-text); }
+.cond-chip:hover { box-shadow: inset 0 0 0 1px var(--primary); }
+.cond-chip.on { box-shadow: inset 0 0 0 2px var(--primary); }
+.cond-pop { position: absolute; z-index: 70; top: calc(100% + 8px); left: 0; width: 380px; display: grid; gap: 12px; padding: 16px 18px; border-radius: 16px; background: var(--surface); box-shadow: 0 0 0 1px var(--line-2), 0 16px 40px -12px rgba(20, 30, 25, 0.28); }
+.cond-out { padding-top: 10px; border-top: 1px solid var(--line); font-size: 14px; font-weight: 700; color: var(--text-2); }
+/* 조건이 들어가니 상태 글자는 작게 */
+.pc .p-status { gap: 8px 18px; font-size: 13px; }
+.pc .p-status .ai-intro { font-size: 13px; padding: 0 10px; }
+
+.p-dots { display: inline-flex; align-items: center; gap: 12px; margin-left: auto; white-space: nowrap; }
+.p-dots + .ai-intro, .p-status .p-dots ~ .ai-intro { margin-left: 0; }
+.pc .p-status .cond { flex-wrap: nowrap; }
+.pc .p-status { gap: 8px 14px; }
+.pc .p-status .ai-intro.icon { width: 34px; padding: 0; justify-content: center; flex: none; }
+.pc .p-status .d-back-go { max-width: 150px; }
+.pc .p-status .d-back-go { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; }

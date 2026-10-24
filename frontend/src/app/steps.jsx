@@ -419,7 +419,7 @@ function ConditionSheet({ open, onClose, S }) {
 /* 회수선 자석 — 회수선 ±2.5%p 안으로 오면 회수선에 딱 붙는다.
    저장된 시연 데이터는 5% 칸만 있어서 회수선 바로 위 칸에 붙인다. */
 const MAGNET = 2.5;
-function RatioControl({ S, need, onSettle }) {
+export function RatioControl({ S, need, onSettle }) {
   const id = useId();
   const span = RATIO.max - RATIO.min;
   const v = S.ratio * 100;
