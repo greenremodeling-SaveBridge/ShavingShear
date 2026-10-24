@@ -615,6 +615,15 @@ mark { background: none; color: inherit; }
 
 /* 단계 목록 시트 */
 .ss { display: grid; gap: 6px; margin-top: 4px; }
+/* 설정 · 화면 보기 (모바일 전체 단계 시트 · PC 설정 창) */
+.ss-set { margin-top: 4px; }
+.set-row { display: grid; gap: 10px; }
+.set-k { display: grid; gap: 2px; }
+.set-k b { font-size: 16px; line-height: 24px; font-weight: 700; color: var(--text-1); }
+.set-k span { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--text-3); }
+.set-row .seg2 { padding: 4px; border-radius: 16px; background: var(--surface-2); }
+.set-row .seg2 button { height: 42px; border-radius: 12px; font-size: 15px; }
+.set-row .seg2 button[aria-selected="true"] { background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
 .ss-h { padding: 10px 0 4px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-3); }
 .ss-row { display: flex; align-items: center; gap: 12px; width: calc(100% + 16px); min-height: 52px; padding: 0 8px; margin: 0 -8px; border-radius: 12px; text-align: left; transition: background 0.15s; }
 .ss-row:hover { background: var(--surface-2); }

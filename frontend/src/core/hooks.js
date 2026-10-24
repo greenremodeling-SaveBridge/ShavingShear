@@ -133,3 +133,21 @@ export function useBigText() {
   }, []);
   return [b, toggle];
 }
+
+/* 화면 보기 · 자동(창 폭) / PC / 모바일 · 화면 어디서 바꿔도 같이 바뀐다 (이 기기에 기억) */
+const viewSubs = new Set();
+const VIEWS = ['auto', 'pc', 'm'];
+const readView = () => { try { const v = localStorage.getItem('ss.view'); return VIEWS.includes(v) ? v : 'auto'; } catch { return 'auto'; } };
+export function useViewMode() {
+  const [v, setV] = useState(readView);
+  useEffect(() => {
+    const f = n => setV(n);
+    viewSubs.add(f);
+    return () => viewSubs.delete(f);
+  }, []);
+  const set = useCallback(n => {
+    try { localStorage.setItem('ss.view', n); } catch { /* 무시 */ }
+    viewSubs.forEach(f => f(n));
+  }, []);
+  return [v, set];
+}

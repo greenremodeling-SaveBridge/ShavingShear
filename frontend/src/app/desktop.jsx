@@ -17,6 +17,7 @@ import { useAssist } from './assistant/context.js';
 import { Assistant } from './assistant/Assistant.jsx';
 import { AskLink } from './assistant/Nudge.jsx';
 import { saveMe } from '../core/assist.js';
+import { ViewSetting } from './viewMode.jsx';
 
 const NAV = [{ id: 'home', name: '홈' }, ...GROUPS.filter(g => g.id !== 'sys').map(g => ({ id: g.id, name: g.name }))];
 const HOME_TABS = [{ id: 'setl', name: '월별 절약 결과' }, { id: 'base', name: '원래 사용량 예측' }, { id: 'meas', name: '추천 공사' }];
@@ -459,7 +460,7 @@ function BldPanel({ S, onSearch }) {
   );
 }
 
-function Rail({ side, setSide }) {
+function Rail({ side, setSide, onSettings }) {
   const a = useAssist();
   const chatOn = !!a?.open;
   const [spinKey, setSpinKey] = useState(0);
@@ -483,6 +484,9 @@ function Rail({ side, setSide }) {
         <span className="rail-ic"><Icon name="building" size={18} /></span>내 건물
       </button>
       <span className="rail-gap" />
+      <button type="button" aria-haspopup="dialog" onClick={onSettings}>
+        <span className="rail-ic"><Icon name="sliders" size={18} /></span>설정
+      </button>
       <button type="button" className="rail-top" aria-label={dark ? '밝은 화면으로' : '어두운 화면으로'} onClick={() => setT(dark ? 'light' : 'dark')}>
         <Icon name={dark ? 'sun' : 'moon'} size={20} />
       </button>
@@ -513,6 +517,14 @@ function BasisSheet({ open, onClose, S }) {
     <Sheet open={open} onClose={onClose} title="공사 전 금액 유의 안내" footer={<Button block onClick={onClose}>확인했어요</Button>}>
       <p className="sheet-lead">공사 전에는 실제 절감량이 없어요. 화면의 금액은 아래 가정으로 계산한 예상치예요.</p>
       {sb ? <BasisRows sb={sb} /> : <Skeleton lines={4} head={false} />}
+    </Sheet>
+  );
+}
+
+function SettingsSheet({ open, onClose }) {
+  return (
+    <Sheet open={open} onClose={onClose} title="설정">
+      <ViewSetting pc />
     </Sheet>
   );
 }
@@ -675,9 +687,10 @@ export function DesktopApp({ S }) {
               : <BldPanel S={S} onSearch={() => setSheet('search')} />}
           </aside>
         )}
-        <Rail side={side} setSide={setSide} />
+        <Rail side={side} setSide={setSide} onSettings={() => setSheet('settings')} />
         <PcTip onOpen={() => a?.setOpen(true)} />
         <BasisSheet open={sheet === 'basis'} onClose={() => setSheet(null)} S={S} />
+        <SettingsSheet open={sheet === 'settings'} onClose={() => setSheet(null)} />
         <NotesSheet open={sheet === 'notes'} onClose={() => setSheet(null)} S={S} />
         <SearchSheet open={sheet === 'search'} onClose={() => setSheet(null)} S={S} onFound={() => goStep('bld')} />
       </div>

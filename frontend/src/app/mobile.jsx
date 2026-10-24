@@ -7,6 +7,7 @@ import { useAssist } from './assistant/context.js';
 import { Assistant, AiTitle, ViewerToggle } from './assistant/Assistant.jsx';
 import { AskRow } from './assistant/Nudge.jsx';
 import { ThemeBtn } from './entry.jsx';
+import { ViewSetting } from './viewMode.jsx';
 import { GROUPS, STEPS, ShellProvider, StepView, stepById, stepIndex, summaries } from './steps.jsx';
 
 function StepSheet({ open, onClose, S, cur, onPick, onExit }) {
@@ -19,6 +20,10 @@ function StepSheet({ open, onClose, S, cur, onPick, onExit }) {
         <span><i />{c.text}</span>
         {c.action && <Button variant="weak" size="s" onClick={c.action.run}>{c.action.label}</Button>}
         <BigTextBtn className="ss-big" /><ThemeBtn className="ss-theme" />
+      </div>
+      <div className="ss-set">
+        <p className="ss-h">설정</p>
+        <ViewSetting pc={false} />
       </div>
       <AskRow before={onClose} send={false} />
       <div className="ss">
