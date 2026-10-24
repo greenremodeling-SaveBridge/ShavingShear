@@ -3,12 +3,12 @@
    위에서 아래로: 머리(관점 토글) → 말풍선 → 추천 질문 → [🎤][입력][보내기]
    ══════════════════════════════════════════════════════ */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { cx } from '../../core/format.js';
+import { cx, firstSentence } from '../../core/format.js';
 import { chipOf, chipsFor } from '../../core/assist.js';
 import { agreeVoice, speechOk, useSpeech, voiceAgreed, VOICE_TOAST } from '../../core/useSpeech.js';
 import { Badge, BuddyBody, BuddyFace, Button, Icon, Info, usePulse } from '../ui.jsx';
 import { useAssist } from './context.js';
-import { AnalyzeCard, Facts, MediateCard, ResolveCard, TrustCard } from './cards.jsx';
+import { AnalyzeCard, Facts, MediateCard, ResolveCard, TrustCard, numTxt } from './cards.jsx';
 import { Thinking } from './Thinking.jsx';
 
 /* 분석 종류마다 진행 단계 (요구서 숫자와 무관한 표시 문구) */
@@ -57,11 +57,51 @@ function Pending({ m }) {
   return <div className="as-ai"><Thinking title={plan.title} steps={plan.steps} done={done} from={plan.from} /></div>;
 }
 
+/* 합의 답은 보는 사람(건물주·세입자)에 맞는 문장 */
+const replyOf = (r, viewer) => (r.intent === 'mediate' && r.data && (r.data.reply_owner || r.data.reply_tenant)
+  ? (viewer === 'tenant' ? r.data.reply_tenant : r.data.reply_owner) || r.reply : r.reply);
+
+/* 답은 핵심 한 줄만 · 나머지는 「자세히」를 눌러야 펼친다 */
+function Brief({ text }) {
+  const [more, setMore] = useState(false);
+  const head = firstSentence(text);
+  const rest = text.slice(head.length).trim();
+  return (
+    <div className="as-brief">
+      <p className="as-text">{head}{more && rest && <> {rest}</>}</p>
+      {rest && <button type="button" className="as-more" aria-expanded={more} onClick={() => setMore(v => !v)}>{more ? '접기' : '자세히'}</button>}
+    </div>
+  );
+}
+
+/* 대화 정리 · 질문마다 핵심 한 줄 + 근거 숫자. 서버가 준 문장·값을 그대로 모은다 (새 문장을 만들지 않음) */
+function Recap({ msgs, S }) {
+  const items = [];
+  msgs.forEach((m, i) => {
+    if (m.role !== 'ai' || !m.res || m.pending) return;
+    const q = msgs.slice(0, i).reverse().find(x => x.role === 'user');
+    items.push({ id: m.id, q: q?.text, tag: m.res.tag && noEmoji(m.res.tag), line: firstSentence(replyOf(m.res, S.viewer)), facts: m.res.facts || [] });
+  });
+  return (
+    <ol className="as-recap as-in">
+      {items.map((x, k) => (
+        <li key={x.id}>
+          <span className="as-recap-n num">{k + 1}</span>
+          <div className="as-recap-b">
+            {x.q && <p className="as-recap-q">{x.q}</p>}
+            <p className="as-recap-a">{x.tag && <span className="as-tag">{x.tag}</span>}{x.line}</p>
+            {x.facts.length > 0 && <p className="as-recap-f num">{x.facts.map(f => `${f.label} ${numTxt(f.value)}${f.unit ? ` ${f.unit}` : ''}`).join(' · ')}</p>}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function Answer({ m, S, entry, onEnter }) {
   const r = m.res;
   const d = r.data;
-  const text = r.intent === 'mediate' && d && (d.reply_owner || d.reply_tenant)
-    ? (S.viewer === 'tenant' ? d.reply_tenant : d.reply_owner) || r.reply : r.reply;
+  const text = replyOf(r, S.viewer);
   const simulated = (r.intent === 'mediate' && !!d) || (r.facts || []).some(f => f.kind === 'simulated');
   const virtual = S.sim && ['mediate', 'analyze', 'trust', 'carbon', 'measures', 'support', 'rent', 'settle'].includes(r.intent);
   let card = null;
@@ -80,7 +120,7 @@ function Answer({ m, S, entry, onEnter }) {
         </div>
       )}
       {r.filled && <p className="as-filled"><Icon name="check" size={14} stroke={2.6} />{r.filled}</p>}
-      {text && <p className="as-text">{text}</p>}
+      {text && <Brief text={text} />}
       {card}
       {/* 분석·신뢰 카드는 근거 숫자를 이미 보여준다 → 칩 대신 그 화면으로 가는 한 줄 */}
       {card && (r.intent === 'analyze' || r.intent === 'trust') && r.facts?.length > 0
@@ -97,7 +137,7 @@ function GotoRow({ to }) {
   const a = useAssist();
   if (!to || !STEP_NAME[to]) return null;
   return (
-    <button type="button" className="as-goto" onClick={() => a.go(to)}>
+    <button type="button" className="as-goto" onClick={() => a.go(to, { explicit: true })}>
       {STEP_NAME[to]} 화면에서 보기<Icon name="right" size={16} />
     </button>
   );
@@ -172,6 +212,8 @@ export function Assistant({ S, variant = 'sheet', onClose, entry, onEnter, onBac
   const last = [...a.msgs].reverse().find(m => m.role === 'ai' && m.res && !m.pending);
   const chips = (last?.res?.chips?.length ? last.res.chips : chipsFor(step)).slice(0, 3);
   const pending = a.msgs.some(m => m.pending);
+  const answered = a.msgs.filter(m => m.role === 'ai' && m.res && !m.pending).length;
+  const [recap, setRecap] = useState(false);
 
   // 새 말이 오면 맨 아래를 보여 준다
   const n = a.msgs.length;
@@ -181,6 +223,7 @@ export function Assistant({ S, variant = 'sheet', onClose, entry, onEnter, onBac
     const el = log.current;
     if (el) { el.scrollTop = el.scrollHeight; stick.current = true; }
   }, [n, sig]);
+  useEffect(() => { setRecap(false); }, [n]);   // 새로 물으면 대화로 돌아온다
   // 맨 아래를 보던 중이면, 내용·입력창 높이가 바뀌어도 맨 아래에 붙어 있게
   useEffect(() => {
     const el = log.current;
@@ -231,9 +274,17 @@ export function Assistant({ S, variant = 'sheet', onClose, entry, onEnter, onBac
           {onClose && <button type="button" className="icon-btn as-x" aria-label="세이빙 AI 닫기" onClick={onClose}><Icon name="close" size={20} /></button>}
         </header>
       )}
+      {answered > 0 && (
+        <div className="as-recap-bar">
+          <button type="button" aria-pressed={recap} onClick={() => setRecap(v => !v)}>
+            {recap ? <><Icon name="left" size={16} />대화로 돌아가기</> : <><Icon name="list" size={16} />대화 정리 · 답 {answered}개</>}
+          </button>
+        </div>
+      )}
       <div className="as-log" ref={log}>
         {a.msgs.length === 0
           ? <Hello chips={chipsFor(step)} entry={entry} onPick={pick} />
+          : recap ? <Recap msgs={a.msgs} S={S} />
           : a.msgs.map(m => <Msg key={m.id} m={m} S={S} entry={entry} onEnter={onEnter} />)}
       </div>
       <div className="as-foot">

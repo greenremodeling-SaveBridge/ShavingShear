@@ -12,6 +12,11 @@ export const dateTxt = s => {
   const t = String(s ?? '');
   return t.length === 8 ? `${t.slice(0, 4)}.${t.slice(4, 6)}.${t.slice(6)}` : (t || '—');
 };
+/** 첫 문장만 (소수점 7.6 같은 건 문장 끝으로 보지 않는다) */
+export const firstSentence = t => {
+  const m = /^(.+?[.!?])(\s|$)/.exec(String(t || ''));
+  return m ? m[1] : String(t || '');
+};
 export const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 export const cx = (...a) => a.filter(Boolean).join(' ');
 

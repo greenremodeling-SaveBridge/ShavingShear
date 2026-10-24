@@ -21,10 +21,11 @@ export function AssistProvider({ S, children }) {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState(null);
-  const [cheerKey, setCheerKey] = useState(0);   // 올라갈 때마다 새싹이 잠깐 만세 (특약 복사 · 합의안 나옴)
+  const [cheerKey, setCheerKey] = useState(0);
+  const [stay, setStay] = useState(false);       // PC · 왼쪽 화면은 사용자가 직접 넘길 때만 바뀐다   // 올라갈 때마다 새싹이 잠깐 만세 (특약 복사 · 합의안 나옴)
   const piiNoted = useRef(false);
   const last = useRef(null);                  // 직전 합의 조건 — "안전하게 하면?" 같은 이어 묻기에 쓴다
-  const nav = useRef({ go: null, step: null, closeOnNav: false });
+  const nav = useRef({ go: null, step: null, closeOnNav: false, stay: false });
   const SRef = useRef(S);
   SRef.current = S;
 
@@ -98,14 +99,18 @@ export function AssistProvider({ S, children }) {
     else if (q) setDraft(q);
   }, [send]);
 
-  /* 화면 이동 — 틀(모바일·PC·처음 화면)이 자기 이동 함수를 등록한다 */
+  /* 화면 이동 — 틀(모바일·PC·처음 화면)이 자기 이동 함수를 등록한다
+     stay(PC): "○○ 화면에서 보기"처럼 사용자가 이동 버튼을 누른 것(explicit)만 옮긴다 */
   const go = useCallback((id, opt) => {
     const n = nav.current;
-    if (!n.go) return;
+    if (!n.go || (n.stay && !opt?.explicit && !opt?.opened)) return;
     if (n.closeOnNav) setOpen(false);
     n.go(id, opt);
   }, []);
-  const bindNav = useCallback((fn, step, closeOnNav) => { nav.current = { go: fn, step, closeOnNav }; }, []);
+  const bindNav = useCallback((fn, step, closeOnNav, stayHere = false) => {
+    nav.current = { go: fn, step, closeOnNav, stay: stayHere };
+    setStay(stayHere);
+  }, []);
 
   /* 조건 바꾸기 + 되돌리기 알림 (요구서 4-2) */
   const showToast = useCallback(t => { setToast({ ...t, key: nid() }); if (t.mood === 'cheer') setCheerKey(n => n + 1); }, []);
@@ -126,7 +131,7 @@ export function AssistProvider({ S, children }) {
     if (ai) s.setAiDraft(true);
     go(to, { opened });
     showToast({
-      text: '조건을 바꿨어요',
+      text: nav.current.stay && !opened ? (to === 'draft' ? '특약 초안에 반영했어요' : '분배 조건을 바꿨어요') : '조건을 바꿨어요',
       undo: () => {
         const c = SRef.current;
         c.setRatio(prev.ratio); c.setInvest(prev.invest); c.setYears(prev.years); c.setAiDraft(prev.aiDraft);
@@ -135,9 +140,9 @@ export function AssistProvider({ S, children }) {
   }, [go, showToast]);
 
   const value = useMemo(() => ({
-    open, setOpen, msgs, setMsgs, push, busy, draft, setDraft, send, ask, go, bindNav, applyAlloc, showToast, cheerKey,
+    open, setOpen, msgs, setMsgs, push, busy, draft, setDraft, send, ask, go, bindNav, applyAlloc, showToast, cheerKey, stay,
     reset: () => { setMsgs([]); last.current = null; },
-  }), [open, msgs, push, busy, draft, send, ask, go, bindNav, applyAlloc, showToast, cheerKey]);
+  }), [open, msgs, push, busy, draft, send, ask, go, bindNav, applyAlloc, showToast, cheerKey, stay]);
 
   return (
     <AssistCtx.Provider value={value}>

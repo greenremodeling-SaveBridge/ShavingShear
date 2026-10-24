@@ -4,7 +4,7 @@
    홈이든 단계든 같은 판, 같은 제목 자리, 같은 줄 모양을 쓴다.
    ══════════════════════════════════════════════════════════════ */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { cx, won, kwh, pct, ymTxt } from '../core/format.js';
+import { cx, won, kwh, pct, ymTxt, firstSentence } from '../core/format.js';
 import { hasAmount, fetchSettlement, fetchExplain } from '../core/domain.js';
 import { useResource, usePersistent, useTheme } from '../core/hooks.js';
 import { BuddyBody, BuddyFace, Badge, BrandMark, Button, ErrorBox, Icon, Mark, Row, Sheet, Skeleton, connInfo, monthBadge, statusText, usePulse } from './ui.jsx';
@@ -16,7 +16,7 @@ import { Picker, usePicker } from './entry.jsx';
 import { useAssist } from './assistant/context.js';
 import { Assistant } from './assistant/Assistant.jsx';
 import { AskLink } from './assistant/Nudge.jsx';
-import { saveMe } from '../core/assist.js';
+import { chipOf, chipsFor, saveMe } from '../core/assist.js';
 import { ViewSetting } from './viewMode.jsx';
 
 const NAV = [{ id: 'home', name: '홈' }, ...GROUPS.filter(g => g.id !== 'sys').map(g => ({ id: g.id, name: g.name }))];
@@ -30,10 +30,6 @@ function useLocal(key, init) {
   return [v, setV];
 }
 
-const firstSentence = t => {
-  const m = /^(.+?[.!?])(\s|$)/.exec(String(t || ''));
-  return m ? m[1] : String(t || '');
-};
 const quarterOf = ym => `${+ym.slice(0, 4)}-${Math.ceil(+ym.slice(4, 6) / 3)}`;
 
 function phasesOf(rows) {
@@ -346,13 +342,91 @@ function useQuarters(S) {
     { enabled: id != null && S.nonce > 0 && S.caseItems.length > 0 });
 }
 
-function AiPanel({ S, go, month, setMonth, askAi, onHome, showReport }) {
+/* ── 오른쪽 · 고른 달 요약 ── 왼쪽 화면은 그대로 두고 여기서 짧게 (크게 보기를 눌러야만 이동) */
+function MonthPeek({ S, peek, q, onClose, onBig, bigLabel }) {
+  const a = useAssist();
+  const id = S.bld.data?.bld_id;
+  const ym = peek.ym;
+  const m = q?.d?.months?.find(x => x.ym === ym);
+  const an = (S.baseline.data?.anomalies || []).find(x => x.ym === ym);
+  const ex = useResource(['ex', S.nonce, ym], () => fetchExplain(id, ym), { enabled: id != null && S.nonce > 0 });
+  const [more, setMore] = useState(false);
+  useEffect(() => setMore(false), [ym]);
+  const mb = m && monthBadge(m.state, q.d.status_code);
+  const text = ex.data?.text || '';
+  const head = firstSentence(text);
+  const rest = text.slice(head.length).trim();
+  return (
+    <section className="peek soft-in" key={ym} aria-label={`${ymTxt(ym)} 요약`}>
+      <div className="peek-h">
+        <span className="ds-ai-k"><Icon name="sparkle" size={16} />AI 요약</span>
+        <button type="button" className="icon-btn" aria-label="요약 닫기" onClick={onClose}><Icon name="close" size={18} /></button>
+      </div>
+      <div className="peek-t">
+        <b>{+ym.slice(0, 4)}년 {+ym.slice(4, 6)}월</b>
+        {mb ? <Badge tone={mb.tone} mark={mb.mark}>{mb.text}</Badge> : an && <Badge tone="red" mark="hold">사용량 급증</Badge>}
+      </div>
+      <div className="rows lined peek-rows">
+        {m && <Row k="금액" v={m.saving_won == null ? '금액 없음' : `${won(m.saving_won)}원`} strong />}
+        {m?.actual_kwh != null && <Row k="실측 사용량" v={`${kwh(m.actual_kwh)} kWh`} />}
+        {m?.baseline_kwh != null && <Row k="원래 사용량 예측" v={`${kwh(m.baseline_kwh)} kWh`} />}
+        {!m && an && <Row k={`${an.fuel} 사용량`} v={`${kwh(an.actual)} kWh`} strong />}
+        {!m && an && <Row k="과거 같은 달 평균" v={`${kwh(an.past_avg)} kWh · ${an.ratio}배`} />}
+      </div>
+      {m?.state === '확인 중' && m.note && ex.status === 'error' && <p className="peek-note">{tidy(m.note)}</p>}
+      <div className="peek-ai">
+        {ex.status === 'error' ? <p>설명을 불러오지 못했어요</p>
+          : !ex.data ? <span className="tile-sk" />
+          : <>
+            <p>{head}{more && rest && <> {rest}</>}</p>
+            {rest && <button type="button" className="peek-more" aria-expanded={more} onClick={() => setMore(v => !v)}>{more ? '접기' : '자세히'}</button>}
+          </>}
+      </div>
+      <div className="peek-act">
+        <button type="button" className="main" onClick={onBig}>{bigLabel}<Icon name="right" size={16} /></button>
+        {a && <button type="button" onClick={() => a.ask(`${ym.slice(2, 4)}년 ${+ym.slice(4, 6)}월 사용량 분석해 줘`)}>이 달 더 물어보기</button>}
+      </div>
+    </section>
+  );
+}
+
+/* ── 오른쪽 · 지금 화면에서 물어볼 만한 것 (누르면 이 칸에서 대화가 열린다 · 왼쪽은 그대로) ──
+   보고 있는 분기·이상 달을 넣어 묻는다 · 서버가 알아듣는 질문 모양만 쓴다 */
+const TRUST_Q = '이 금액 믿어도 돼요?';
+function suggestFor(step, S, top) {
+  const per = S.settlement.data?.period;
+  const odd = top && `${top.ym.slice(2, 4)}년 ${+top.ym.slice(4, 6)}월 ${top.fuel || '사용량'}${top.fuel ? '가' : '이'} 왜 튀었어?`;
+  if (['prof', 'meas', 'base'].includes(step)) return [odd, TRUST_Q].filter(Boolean);
+  if (step === 'setl') return [per && `${String(per).replace(/^(\d{4})\s*/, '$1년 ')} 정산해도 돼?`, TRUST_Q, odd].filter(Boolean);
+  if (step === 'sys') return [TRUST_Q];
+  return chipsFor(step);
+}
+function Suggest({ step, S, top }) {
+  const a = useAssist();
+  if (!a) return null;
+  return (
+    <div className="ds-sug" role="list" aria-label="이 화면에서 물어볼 만한 것">
+      <p className="ds-sug-h">이 화면에서 물어볼 만한 것</p>
+      {suggestFor(step, S, top).slice(0, 3).map(c => {
+        const x = chipOf(c);
+        return (
+          <button key={x.label} type="button" role="listitem" onClick={() => (x.message ? a.ask(x.message) : a.ask(x.fill, { send: false }))}>
+            <Icon name="sparkle" size={14} /><span>{x.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AiPanel({ S, go, setMonth, askAi, onHome, showReport, step }) {
   const assist = useAssist();
   // 새싹: 답을 기다리면 생각 중 · 고른 분기가 '검증 완료'면 만세
   const cheer0 = usePulse(S.settlement.data?.status_code === 'VERIFIED' ? S.quarterKey : null, 'cheer', 3200, true);
   const cheer1 = usePulse(assist?.cheerKey || null, 'cheer');
   const cheer = cheer1 || cheer0;
   const [only, setOnly] = useState(false);
+  const [peek, setPeek] = useState(null);   // { key, ym } · 이 칸에서만 요약해 보여주는 달
   const top = useMemo(() => (S.baseline.data?.anomalies || []).reduce((a, b) => (!a || b.ratio > a.ratio ? b : a), null), [S.baseline.data]);
   const id = S.bld.data?.bld_id;
   const ex = useResource(['ex', S.nonce, top?.ym ?? null], () => fetchExplain(id, top.ym), { enabled: !!top && id != null && S.nonce > 0 });
@@ -364,14 +438,21 @@ function AiPanel({ S, go, month, setMonth, askAi, onHome, showReport }) {
   }, [qs.data]);
   const lex = useResource(['lex', S.nonce, last?.ym ?? null], () => fetchExplain(id, last.ym), { enabled: !!last && id != null && S.nonce > 0 });
   const keys = new Set(S.caseItems.map(c => c.key));
-  const open = (key, ym, ai = false) => {
+  // 고르면 이 칸에서 요약만 · 다시 누르면 닫힘. 왼쪽 화면은 건드리지 않는다
+  const look = (key, ym) => {
+    setPeek(p => (p?.ym === ym ? null : { key, ym }));
+    document.querySelector('.d-side')?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  // 크게 보기 · 사용자가 누른 이동이라 이때만 왼쪽을 바꾼다
+  const big = ({ key, ym }) => {
     if (!keys.has(key)) { go('base'); return; }
-    if (onHome) { showReport(key, ym); if (ai) askAi(); return; }   // 홈이면 그 자리에서 왼쪽 정산 리포트를 바꾼다
+    if (onHome) { showReport(key, ym); askAi(); return; }   // 홈이면 그 자리에서 왼쪽 정산 리포트를 바꾼다
     S.setQuarterKey(key);
     setMonth(ym);
-    if (ai) askAi();
+    askAi();
     go('setl');
   };
+  const bigLabel = p => (!keys.has(p.key) ? '원래 사용량 예측에서 크게 보기' : onHome ? '홈 리포트에서 크게 보기' : '정산 화면에서 크게 보기');
   return (
     <>
       <AskLink line send={false} className="ds-ask" />
@@ -382,31 +463,38 @@ function AiPanel({ S, go, month, setMonth, askAi, onHome, showReport }) {
           <button type="button" role="radio" aria-checked={only} onClick={() => setOnly(true)}>보류만</button>
         </div>
       </div>
-      {last && (
-        <div className="buddy">
-          <button type="button" className="buddy-pic" onClick={() => open(last.key, last.ym, true)} aria-label={`${ymTxt(last.ym)} AI 설명 보기`}>
-            <BuddyBody w={72} live mood={assist?.busy ? 'think' : cheer || 'idle'} />
-          </button>
-          <div className="buddy-b">
-            <span className="ds-ai-k">세이빙 셰어 AI</span>
-            <b>{+last.ym.slice(0, 4)}년 {+last.ym.slice(4, 6)}월 분석이 나왔어요</b>
-            <p>{lex.data ? firstSentence(lex.data.text) : lex.status === 'error' ? '설명을 불러오지 못했어요' : <span className="tile-sk" />}</p>
-          </div>
-          <div className="buddy-act">
-            <button type="button" className="main" onClick={() => open(last.key, last.ym)}>{+last.ym.slice(4, 6)}월 리포트 보기</button>
-            <button type="button" onClick={() => open(last.key, last.ym, true)}>AI 설명 보기</button>
-          </div>
-        </div>
+      {peek ? (
+        <MonthPeek S={S} peek={peek} q={(qs.data || []).find(x => x.key === peek.key)} onClose={() => setPeek(null)}
+          onBig={() => big(peek)} bigLabel={bigLabel(peek)} />
+      ) : (
+        <>
+          {last && (
+            <div className="buddy">
+              <button type="button" className="buddy-pic" onClick={() => look(last.key, last.ym)} aria-label={`${ymTxt(last.ym)} 요약 보기`}>
+                <BuddyBody w={72} live mood={assist?.busy ? 'think' : cheer || 'idle'} />
+              </button>
+              <div className="buddy-b">
+                <span className="ds-ai-k">세이빙 셰어 AI</span>
+                <b>{+last.ym.slice(0, 4)}년 {+last.ym.slice(4, 6)}월 분석이 나왔어요</b>
+                <p>{lex.data ? firstSentence(lex.data.text) : lex.status === 'error' ? '설명을 불러오지 못했어요' : <span className="tile-sk" />}</p>
+              </div>
+              <div className="buddy-act one">
+                <button type="button" className="main" onClick={() => look(last.key, last.ym)}>{+last.ym.slice(4, 6)}월 요약 보기</button>
+              </div>
+            </div>
+          )}
+          {top && (
+            <button type="button" className="ds-ai" onClick={() => look(quarterOf(top.ym), top.ym)}>
+              <span className="ds-ai-k"><Icon name="sparkle" size={16} />세이빙 셰어 AI</span>
+              <span className="ds-ai-v">
+                <span>{ex.data ? firstSentence(ex.data.text) : ex.status === 'error' ? '설명을 불러오지 못했어요' : <span className="tile-sk" />}</span>
+                <Icon name="right" size={18} />
+              </span>
+            </button>
+          )}
+        </>
       )}
-      {top && (
-        <button type="button" className="ds-ai" onClick={() => open(quarterOf(top.ym), top.ym, true)}>
-          <span className="ds-ai-k"><Icon name="sparkle" size={16} />세이빙 셰어 AI</span>
-          <span className="ds-ai-v">
-            <span>{ex.data ? firstSentence(ex.data.text) : ex.status === 'error' ? '설명을 불러오지 못했어요' : <span className="tile-sk" />}</span>
-            <Icon name="right" size={18} />
-          </span>
-        </button>
-      )}
+      <Suggest step={step} S={S} top={top} />
       <p className="ds-sub">월별 판정</p>
       {qs.status === 'error' ? <ErrorBox error={qs.error} onRetry={qs.reload} />
         : !qs.data ? <Skeleton lines={8} head={false} />
@@ -420,8 +508,8 @@ function AiPanel({ S, go, month, setMonth, askAi, onHome, showReport }) {
                 const mb = monthBadge(m.state, q.d.status_code);
                 const nil = m.saving_won == null;
                 return (
-                  <button key={m.ym} type="button" className="ds-row" aria-current={S.quarterKey === q.key && month === m.ym ? 'true' : undefined}
-                    title={`${ymTxt(m.ym)} 정산 리포트 보기`} onClick={() => open(q.key, m.ym)}>
+                  <button key={m.ym} type="button" className="ds-row" aria-current={peek?.ym === m.ym ? 'true' : undefined}
+                    title={`${ymTxt(m.ym)} 요약 보기`} onClick={() => look(q.key, m.ym)}>
                     <span className={cx('ds-ic', mb.tone)}><Mark k={mb.mark} size={14} /></span>
                     <span className="ds-t"><b className="num">{ymTxt(m.ym)}</b><span className={mb.tone}>{mb.text}</span></span>
                     <span className={cx('ds-v num', nil && 'nil')}>{nil ? '금액 없음' : `${won(m.saving_won)}원`}</span>
@@ -647,7 +735,7 @@ export function DesktopApp({ S }) {
   const goPage = page => { setRoute({ page, step: null }); document.querySelector('.d-main')?.scrollTo(0, 0); };
 
   // 세이빙 AI 가 화면을 옮길 때 · 오른쪽 대화는 그대로 두고 판만 바꾼다
-  useEffect(() => { a?.bindNav(goStep, route.step || route.page, false); }, [route.page, route.step]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { a?.bindNav(goStep, route.step || route.page, false, true); }, [route.page, route.step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const k = e => {
@@ -683,7 +771,8 @@ export function DesktopApp({ S }) {
         ) : side && (
           <aside className="d-side" aria-label={side === 'ai' ? 'AI 설명' : '내 건물'} style={sideW ? { width: sideW } : undefined}>
             {side === 'ai'
-              ? <AiPanel S={S} go={goStep} month={month} setMonth={setMonth} askAi={askAi} onHome={route.page === 'home'} showReport={showReport} />
+              ? <AiPanel S={S} go={goStep} setMonth={setMonth} askAi={askAi} onHome={route.page === 'home'} showReport={showReport}
+                  step={route.step || (route.page === 'home' ? 'bld' : GROUPS.find(g => g.id === route.page)?.steps[0])} />
               : <BldPanel S={S} onSearch={() => setSheet('search')} />}
           </aside>
         )}

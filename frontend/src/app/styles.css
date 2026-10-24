@@ -1354,3 +1354,43 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 .conn-row { flex-wrap: wrap; row-gap: 10px; }
 .conn-row > span { margin-right: 12px; }
 .ss-big + .ss-theme { margin-left: 10px; }
+
+/* ══ 오른쪽 AI 패널 · 왼쪽 화면을 옮기지 않고 이 칸에서 요약 ══ */
+.buddy-act.one { grid-template-columns: 1fr; }
+.peek { display: grid; gap: 12px; padding: 16px 18px 18px; margin-bottom: 20px; border-radius: 20px; background: var(--primary-weak); }
+.peek-h { display: flex; align-items: center; justify-content: space-between; margin: -6px -8px -4px 0; }
+.peek-h .icon-btn { width: 36px; height: 36px; color: var(--text-3); }
+.peek-t { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.peek-t b { font-size: 20px; line-height: 28px; font-weight: 700; letter-spacing: -0.02em; }
+.peek-rows { padding: 2px 14px; border-radius: 14px; background: var(--surface); }
+.peek-rows .row { padding: 10px 0; }
+.peek-note { font-size: 14px; line-height: 21px; color: var(--red-text); }
+.peek-ai { display: grid; gap: 4px; justify-items: start; }
+.peek-ai p { font-size: 15px; line-height: 24px; color: var(--text-1); }
+.peek-more, .as-more { min-height: 28px; font-size: 14px; font-weight: 700; color: var(--text-3); text-decoration: underline; text-underline-offset: 3px; }
+.peek-more:hover, .as-more:hover { color: var(--text-1); }
+.peek-act { display: grid; gap: 8px; }
+.peek-act button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 40px; border-radius: 12px; font-size: 15px; font-weight: 700; background: var(--surface); color: var(--text-1); }
+.peek-act button.main { background: var(--primary); color: var(--on-primary); }
+.peek-act button:hover { filter: brightness(0.96); }
+
+.ds-sug { display: grid; gap: 6px; margin-top: 4px; }
+.ds-sug-h { font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-3); }
+.ds-sug button { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 12px; border-radius: 12px; background: var(--surface-2); font-size: 14px; line-height: 20px; font-weight: 600; color: var(--text-1); text-align: left; transition: background 0.15s; }
+.ds-sug button:hover { background: var(--fill); }
+.ds-sug button svg { flex: 0 0 auto; color: var(--primary); }
+
+/* ══ 세이빙 AI 대화 · 핵심 한 줄 + 자세히 · 대화 정리 ══ */
+.as-brief { display: grid; gap: 2px; justify-items: start; }
+.as-recap-bar { flex: 0 0 auto; display: flex; padding: 0 0 8px; }
+.as-recap-bar button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); font-size: 13px; font-weight: 700; color: var(--text-2); transition: background 0.15s; }
+.as-recap-bar button:hover { background: var(--surface-2); }
+.as-recap-bar button[aria-pressed="true"] { background: var(--text-1); color: var(--surface); box-shadow: none; }
+.as-recap { display: grid; gap: 14px; list-style: none; padding: 0; margin: 0; }
+.as-recap li { display: flex; gap: 12px; padding: 14px; border-radius: 14px; background: var(--surface-2); }
+.as-recap-n { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); font-size: 12px; font-weight: 700; color: var(--text-2); }
+.as-recap-b { display: grid; gap: 6px; min-width: 0; }
+.as-recap-q { font-size: 13px; line-height: 19px; color: var(--text-3); }
+.as-recap-a { font-size: 15px; line-height: 23px; font-weight: 600; color: var(--text-1); }
+.as-recap-a .as-tag { margin-right: 6px; vertical-align: 1px; }
+.as-recap-f { font-size: 13px; line-height: 19px; color: var(--text-2); }

@@ -12,7 +12,7 @@ import { useAssist } from './context.js';
 export const numTxt = v => (isNum(v) ? Number(v).toLocaleString('ko-KR', { maximumFractionDigits: 3 }) : '—');
 const sqm = n => `${numTxt(n)}\u00A0㎡`;
 
-/* ── 근거 칩 · 누르면 그 단계로 ── */
+/* ── 근거 칩 · 누르면 그 단계로 (PC 는 화면을 옮기지 않으니 값만) ── */
 export function Facts({ facts }) {
   const a = useAssist();
   if (!facts?.length) return null;
@@ -27,7 +27,7 @@ export function Facts({ facts }) {
             <b className="num">{numTxt(f.value)}{f.unit ? ` ${f.unit}` : ''}</b>
           </>
         );
-        return f.goto
+        return f.goto && !a.stay
           ? <button key={i} type="button" className="as-fact" onClick={() => a.go(f.goto)}>{body}<Icon name="right" size={14} stroke={2.4} /></button>
           : <span key={i} className="as-fact">{body}</span>;
       })}
@@ -81,8 +81,8 @@ export function MediateCard({ data, viewer, building }) {
         ))}
       </div>
       <div className="mc-act">
-        <Button variant="gray" size="m" onClick={() => a.applyAlloc(cond, { to: 'draft', ai: true, building })}>특약 만들기</Button>
-        <Button size="m" onClick={() => a.applyAlloc(cond, { building })}>이 조건으로 보기</Button>
+        <Button variant="gray" size="m" onClick={() => a.applyAlloc(cond, { to: 'draft', ai: true, building })}>{a.stay ? '특약에 반영' : '특약 만들기'}</Button>
+        <Button size="m" onClick={() => a.applyAlloc(cond, { building })}>{a.stay ? '이 조건 적용' : '이 조건으로 보기'}</Button>
       </div>
     </div>
   );
@@ -165,7 +165,7 @@ export function ResolveCard({ data, S, entry, onEnter }) {
       ) : opened ? (
         entry
           ? <Button block size="m" onClick={onEnter}>이 건물로 시작하기</Button>
-          : <Button variant="gray" block size="m" onClick={() => a.go('bld')}>건물 정보 보기</Button>
+          : <Button variant="gray" block size="m" onClick={() => a.go('bld', { explicit: true })}>건물 정보 보기</Button>
       ) : null}
     </div>
   );
