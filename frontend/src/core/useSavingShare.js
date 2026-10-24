@@ -14,6 +14,7 @@ export const RATIO = { min: RATIO_MIN, max: RATIO_MAX, step: RATIO_STEP, snap: r
 const exact = r => +Math.min(RATIO_MAX, Math.max(RATIO_MIN, r)).toFixed(3);
 export const INVEST = { min: 1_000_000, max: 10_000_000_000 };
 export const YEARS = { min: 1, max: 30 };
+export const BUILD = { min: 1, max: 12, init: 2 };   // 공사 기간(개월)
 
 export function useSavingShare({ autoLookup = true } = {}) {
   const conn = useClient();
@@ -33,6 +34,9 @@ export function useSavingShare({ autoLookup = true } = {}) {
   // 세이빙 AI: 누구 관점으로 설명할지 (숫자는 같고 문장만 바뀐다) · 특약을 AI 가 채웠는지
   const [viewer, setViewer] = usePersistent('ss.viewer', 'owner', v => (v === 'tenant' ? 'tenant' : 'owner'));
   const [aiDraft, setAiDraft] = usePersistent('ss.aiDraft', false, v => v === true);
+  // 공사 기간(개월) · 계산에는 쓰지 않는 가정값, 화면과 특약에 보여준다
+  const [buildMonths, setBuildMonths] = usePersistent('ss.buildMonths', BUILD.init,
+    v => (Number.isInteger(v) && v >= BUILD.min && v <= BUILD.max ? v : BUILD.init));
 
   const setRatio = useCallback(r => setRatioRaw(RATIO.snap(r)), [setRatioRaw]);
   const setRatioExact = useCallback(r => setRatioRaw(exact(r)), [setRatioRaw]);
@@ -146,6 +150,6 @@ export function useSavingShare({ autoLookup = true } = {}) {
     eligibility, profile, measures, baseline, allocation,
     cases, caseItems, quarterKey, setQuarterKey, qSel, settlement, explain, target,
     picked, toggleMeasure, resetDemoConditions, measureList: allMeas.current,
-    sim, viewer, setViewer, aiDraft, setAiDraft,
+    sim, viewer, setViewer, aiDraft, setAiDraft, buildMonths, setBuildMonths,
   };
 }

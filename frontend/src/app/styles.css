@@ -1596,3 +1596,8 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 .pc .p-status .ai-intro.icon { width: 34px; padding: 0; justify-content: center; flex: none; }
 .pc .p-status .d-back-go { max-width: 150px; }
 .pc .p-status .d-back-go { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; }
+
+/* 추천 공사 · 공사 기간(가정) */
+.ms-build { padding-top: 12px; }
+.ms-build .field { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ms-build .field-l { display: inline-flex; align-items: center; font-size: 15px; color: var(--text-2); }

@@ -9,7 +9,7 @@ import { cx, won, kwh, pct, pct1, ymTxt, periodTxt, dateTxt, koMoney } from '../
 import { hasAmount, explainTarget, fetchExplain } from '../core/domain.js';
 import { useResource } from '../core/hooks.js';
 import { BACKUP_INVEST, BACKUP_YEARS } from '../core/client.js';
-import { INVEST, YEARS, RATIO } from '../core/useSavingShare.js';
+import { BUILD, INVEST, YEARS, RATIO } from '../core/useSavingShare.js';
 import {
   ActionBadge, AmountField, Badge, Button, Check, Chips, ErrorBox, Fold, Icon, Info, Note, Num, Res, Row, Sheet,
   Skeleton, StatusBadge, Stepper, Switch, errorHead, monthBadge, BuddyFace, BuddyBody } from './ui.jsx';
@@ -313,6 +313,10 @@ function MeasView({ S }) {
           <Row k="절감 합계" v={`${kwh(klo)}~${kwh(khi)} kWh`} strong />
           <Row k={<>온실가스 감축{efOpen && <Info>배출계수를 아직 확인하지 않아 추정값이에요</Info>}</>}
             v={<span className="v-tag">{tco2(clo)}~{tco2(chi)} tCO₂e{efOpen && <Badge>가정으로 계산한 값</Badge>}</span>} />
+          <div className="ms-build">
+            <Stepper label="공사 기간" info={<Info>가정값이에요. 실제 견적·일정에 맞춰 바꾸세요. 계약서 제1조에 들어가요</Info>}
+              value={S.buildMonths} min={BUILD.min} max={BUILD.max} unit="개월" onChange={S.setBuildMonths} />
+          </div>
         </div>
       } />
   );
@@ -761,6 +765,7 @@ function draftDoc(S) {
     addr: h(b.addr || '○○', 1, '1단계 「건물 확인」에서 맞다고 확인한 건축물대장 주소예요.'),
     area: b.area ? h(`${Number(b.area).toLocaleString('ko-KR')}㎡`, 1, '건축물대장의 연면적이에요. 지원사업 요건과 사용량 비교에 쓰여요.') : null,
     work: h(on.length ? on.join(', ') : '추천 공사', 4, '4단계 「추천 공사」에서 켜 둔 공사예요. 스위치로 끈 공사는 여기서 빠져요.'),
+    months: h(`약 ${S.buildMonths}개월`, 4, '4단계 「추천 공사」에서 잡은 공사 기간이에요. 가정값이라 실제 견적·일정에 맞춰 바꾸세요.'),
     rate: h(rlo != null ? pctRange(rlo, rhi) : '—', 4, '고른 공사의 절감량을 더한 뒤 서로 겹치는 만큼 뺀 예상값이에요. 실제 금액은 아니에요.'),
     invest: h(koMoney(S.invest), 6, '6단계 「이익 나누기」에서 넣은 공사비예요. 회수 기간 계산의 기준이 돼요.'),
     prog: h(el?.programs?.length ? el.programs.join(' · ') : '지원사업', 2, el?.msg ? `2단계 「지원 대상 확인」 결과예요: ${el.msg}` : '2단계 「지원 대상 확인」 결과예요.'),
@@ -785,8 +790,8 @@ function draftDoc(S) {
   /* 조항마다 keys(화면에 보이는 핵심 줄) · full(원문 · 복사) */
   const cl = [
     { k: '공사와 지원',
-      keys: [['공사', [H.work]], ['예상 절감률', [H.rate]], ['공사비', [H.invest, ' · 임대인 부담']], ['지원사업', [H.prog, ' 신청 검토']]],
-      full: ['임대인은 ', H.work, ' 공사를 하고, 예상 절감률은 ', H.rate, '이다. 공사비 ', H.invest, '은 임대인이 부담하며, ', H.prog, ' 신청을 함께 검토한다.'] },
+      keys: [['공사', [H.work]], ['공사 기간', [H.months]], ['예상 절감률', [H.rate]], ['공사비', [H.invest, ' · 임대인 부담']], ['지원사업', [H.prog, ' 신청 검토']]],
+      full: ['임대인은 ', H.work, ' 공사를 ', H.months, ' 동안 하고, 예상 절감률은 ', H.rate, '이다. 공사비 ', H.invest, '은 임대인이 부담하며, ', H.prog, ' 신청을 함께 검토한다.'] },
     { k: '절감액 산정',
       keys: [['계산', ['기온 보정 기저선 − 실측 사용량']], ['예측 오차', [H.cv]], ['설명력', [H.r2]], ['단가', ['전기 ', H.pe, ' · 가스 ', H.pg]], ['갱신', ['계약 시점 실제 요금표']]],
       full: ['절감량은 기온 보정 기저선과 실측 사용량의 차이로 산정한다. 기저선의 현재 예측 오차는 ', H.cv, ', 설명력은 ', H.r2, '이다. 단가는 전기 ', H.pe, ', 가스 ', H.pg, '를 적용하되, 계약 시점의 실제 요금표로 갱신한다.'] },

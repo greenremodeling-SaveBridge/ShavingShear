@@ -382,11 +382,11 @@ export function AmountField({ label, value, onChange, min, max }) {
   );
 }
 
-export function Stepper({ label, value, min, max, onChange, unit }) {
+export function Stepper({ label, info, value, min, max, onChange, unit }) {
   const id = useId();
   return (
     <div className="field">
-      <span id={id} className="field-l">{label}</span>
+      <span id={id} className="field-l">{label}{info}</span>
       <div className="stepper" role="group" aria-labelledby={id}>
         <button type="button" aria-label={`${label} 줄이기`} disabled={value <= min} onClick={() => onChange(value - 1)}><Icon name="minus" /></button>
         <output className="num" aria-live="polite">{value}{unit}</output>
