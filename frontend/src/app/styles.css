@@ -1357,19 +1357,19 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 
 /* ══ 오른쪽 AI 패널 · 왼쪽 화면을 옮기지 않고 이 칸에서 요약 ══ */
 .buddy-act.one { grid-template-columns: 1fr; }
-.peek { display: grid; gap: 12px; padding: 16px 18px 18px; margin-bottom: 20px; border-radius: 20px; background: var(--primary-weak); }
+.peek { display: grid; gap: 10px; padding: 16px 18px 18px; margin-bottom: 20px; border-radius: 20px; background: var(--primary-weak); }
 .peek-h { display: flex; align-items: center; justify-content: space-between; margin: -6px -8px -4px 0; }
 .peek-h .icon-btn { width: 36px; height: 36px; color: var(--text-3); }
 .peek-t { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .peek-t b { font-size: 20px; line-height: 28px; font-weight: 700; letter-spacing: -0.02em; }
 .peek-rows { padding: 2px 14px; border-radius: 14px; background: var(--surface); }
-.peek-rows .row { padding: 10px 0; }
+.peek-rows .row { padding: 8px 0; }
 .peek-note { font-size: 14px; line-height: 21px; color: var(--red-text); }
 .peek-ai { display: grid; gap: 4px; justify-items: start; }
 .peek-ai p { font-size: 15px; line-height: 24px; color: var(--text-1); }
 .peek-more, .as-more { min-height: 28px; font-size: 14px; font-weight: 700; color: var(--text-3); text-decoration: underline; text-underline-offset: 3px; }
 .peek-more:hover, .as-more:hover { color: var(--text-1); }
-.peek-act { display: grid; gap: 8px; }
+.peek-act { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px; }
 .peek-act button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 40px; border-radius: 12px; font-size: 15px; font-weight: 700; background: var(--surface); color: var(--text-1); }
 .peek-act button.main { background: var(--primary); color: var(--on-primary); }
 .peek-act button:hover { filter: brightness(0.96); }

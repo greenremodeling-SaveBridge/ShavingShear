@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cx, won, kwh, pct, ymTxt, firstSentence } from '../core/format.js';
 import { hasAmount, fetchSettlement, fetchExplain } from '../core/domain.js';
 import { useResource, usePersistent, useTheme } from '../core/hooks.js';
-import { BuddyBody, BuddyFace, Badge, BrandMark, Button, ErrorBox, Icon, Mark, Row, Sheet, Skeleton, connInfo, monthBadge, statusText, usePulse } from './ui.jsx';
+import { BuddyBody, BuddyFace, Badge, BrandMark, Button, ErrorBox, Icon, Row, Sheet, Skeleton, connInfo, monthBadge, statusText, usePulse } from './ui.jsx';
 import { MiniBars, MiniChecks, MiniLines, MiniRange, MiniSplit, dataSpan } from './charts.jsx';
 import {
   BasisRows, GROUPS, STEPS, ShellProvider, StepView, baselineFail, baselinePass, groupOf, pctRange, stepById, stepIndex, tidy,
@@ -383,8 +383,8 @@ function MonthPeek({ S, peek, q, onClose, onBig, bigLabel }) {
           </>}
       </div>
       <div className="peek-act">
-        <button type="button" className="main" onClick={onBig}>{bigLabel}<Icon name="right" size={16} /></button>
-        {a && <button type="button" onClick={() => a.ask(`${ym.slice(2, 4)}년 ${+ym.slice(4, 6)}월 사용량 분석해 줘`)}>이 달 더 물어보기</button>}
+        <button type="button" className="main" title={bigLabel} aria-label={bigLabel} onClick={onBig}>크게 보기<Icon name="right" size={16} /></button>
+        {a && <button type="button" title="이 달을 세이빙 AI에게 더 묻기" onClick={() => a.ask(`${ym.slice(2, 4)}년 ${+ym.slice(4, 6)}월 사용량 분석해 줘`)}>더 묻기</button>}
       </div>
     </section>
   );
@@ -401,13 +401,13 @@ function suggestFor(step, S, top) {
   if (step === 'sys') return [TRUST_Q];
   return chipsFor(step);
 }
-function Suggest({ step, S, top }) {
+function Suggest({ step, S, top, max = 3 }) {
   const a = useAssist();
   if (!a) return null;
   return (
     <div className="ds-sug" role="list" aria-label="이 화면에서 물어볼 만한 것">
       <p className="ds-sug-h">이 화면에서 물어볼 만한 것</p>
-      {suggestFor(step, S, top).slice(0, 3).map(c => {
+      {suggestFor(step, S, top).slice(0, max).map(c => {
         const x = chipOf(c);
         return (
           <button key={x.label} type="button" role="listitem" onClick={() => (x.message ? a.ask(x.message) : a.ask(x.fill, { send: false }))}>
@@ -425,7 +425,6 @@ function AiPanel({ S, go, setMonth, askAi, onHome, showReport, step }) {
   const cheer0 = usePulse(S.settlement.data?.status_code === 'VERIFIED' ? S.quarterKey : null, 'cheer', 3200, true);
   const cheer1 = usePulse(assist?.cheerKey || null, 'cheer');
   const cheer = cheer1 || cheer0;
-  const [only, setOnly] = useState(false);
   const [peek, setPeek] = useState(null);   // { key, ym } · 이 칸에서만 요약해 보여주는 달
   const top = useMemo(() => (S.baseline.data?.anomalies || []).reduce((a, b) => (!a || b.ratio > a.ratio ? b : a), null), [S.baseline.data]);
   const id = S.bld.data?.bld_id;
@@ -438,11 +437,8 @@ function AiPanel({ S, go, setMonth, askAi, onHome, showReport, step }) {
   }, [qs.data]);
   const lex = useResource(['lex', S.nonce, last?.ym ?? null], () => fetchExplain(id, last.ym), { enabled: !!last && id != null && S.nonce > 0 });
   const keys = new Set(S.caseItems.map(c => c.key));
-  // 고르면 이 칸에서 요약만 · 다시 누르면 닫힘. 왼쪽 화면은 건드리지 않는다
-  const look = (key, ym) => {
-    setPeek(p => (p?.ym === ym ? null : { key, ym }));
-    document.querySelector('.d-side')?.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  // 고르면 이 칸에서 요약만 · 왼쪽 화면은 건드리지 않는다
+  const look = (key, ym) => setPeek({ key, ym });
   // 크게 보기 · 사용자가 누른 이동이라 이때만 왼쪽을 바꾼다
   const big = ({ key, ym }) => {
     if (!keys.has(key)) { go('base'); return; }
@@ -456,13 +452,7 @@ function AiPanel({ S, go, setMonth, askAi, onHome, showReport, step }) {
   return (
     <>
       <AskLink line send={false} className="ds-ask" />
-      <div className="ds-head">
-        <h2>AI 설명</h2>
-        <div className="segbar sm" role="radiogroup" aria-label="월 보기">
-          <button type="button" role="radio" aria-checked={!only} onClick={() => setOnly(false)}>전체</button>
-          <button type="button" role="radio" aria-checked={only} onClick={() => setOnly(true)}>보류만</button>
-        </div>
-      </div>
+      <div className="ds-head"><h2>AI 설명</h2></div>
       {peek ? (
         <MonthPeek S={S} peek={peek} q={(qs.data || []).find(x => x.key === peek.key)} onClose={() => setPeek(null)}
           onBig={() => big(peek)} bigLabel={bigLabel(peek)} />
@@ -485,7 +475,7 @@ function AiPanel({ S, go, setMonth, askAi, onHome, showReport, step }) {
           )}
           {top && (
             <button type="button" className="ds-ai" onClick={() => look(quarterOf(top.ym), top.ym)}>
-              <span className="ds-ai-k"><Icon name="sparkle" size={16} />세이빙 셰어 AI</span>
+              <span className="ds-ai-k"><Icon name="sparkle" size={16} />눈여겨볼 달 · {ymTxt(top.ym)}</span>
               <span className="ds-ai-v">
                 <span>{ex.data ? firstSentence(ex.data.text) : ex.status === 'error' ? '설명을 불러오지 못했어요' : <span className="tile-sk" />}</span>
                 <Icon name="right" size={18} />
@@ -494,31 +484,7 @@ function AiPanel({ S, go, setMonth, askAi, onHome, showReport, step }) {
           )}
         </>
       )}
-      <Suggest step={step} S={S} top={top} />
-      <p className="ds-sub">월별 판정</p>
-      {qs.status === 'error' ? <ErrorBox error={qs.error} onRetry={qs.reload} />
-        : !qs.data ? <Skeleton lines={8} head={false} />
-        : qs.data.map(q => {
-          const ms = (q.d?.months || []).filter(m => !only || m.state === '확인 중');
-          if (!ms.length && !q.err) return null;
-          return (
-            <div key={q.key} className="ds-q">
-              <p className="ds-qh">{q.period} · {q.txt}</p>
-              {q.err ? <p className="ds-err">불러오지 못했어요</p> : ms.map(m => {
-                const mb = monthBadge(m.state, q.d.status_code);
-                const nil = m.saving_won == null;
-                return (
-                  <button key={m.ym} type="button" className="ds-row" aria-current={peek?.ym === m.ym ? 'true' : undefined}
-                    title={`${ymTxt(m.ym)} 요약 보기`} onClick={() => look(q.key, m.ym)}>
-                    <span className={cx('ds-ic', mb.tone)}><Mark k={mb.mark} size={14} /></span>
-                    <span className="ds-t"><b className="num">{ymTxt(m.ym)}</b><span className={mb.tone}>{mb.text}</span></span>
-                    <span className={cx('ds-v num', nil && 'nil')}>{nil ? '금액 없음' : `${won(m.saving_won)}원`}</span>
-                  </button>
-                );
-              })}
-            </div>
-          );
-        })}
+      <Suggest step={step} S={S} top={top} max={peek ? 2 : 3} />
     </>
   );
 }
