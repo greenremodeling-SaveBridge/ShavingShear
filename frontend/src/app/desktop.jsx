@@ -5,7 +5,7 @@
    ══════════════════════════════════════════════════════════════ */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cx, won, kwh, pct, pct1, ymTxt, firstSentence, koMoney, manwon, manRange, costTxt } from '../core/format.js';
-import { useResource, usePersistent, useTheme } from '../core/hooks.js';
+import { usePersistent, useTheme } from '../core/hooks.js';
 import { BuddyBody, BuddyFace, Badge, BrandMark, Button, ErrorBox, Icon, Row, Sheet, Skeleton, connInfo, monthBadge, statusText, usePulse } from './ui.jsx';
 import { MiniBars, MiniChecks, MiniLines, MiniRange, MiniSplit, dataSpan } from './charts.jsx';
 import {
