@@ -280,7 +280,8 @@ function MeasView({ S }) {
                         <Info label={`${m.name} 자세히`}>
                           <p>{tidy(m.addresses)}{rr.length === 2 ? ` · 절감률 ${pctRange(rr[0], rr[1])}` : ''}</p>
                           {m.survey_note && <p>{tidy(m.survey_note)}</p>}
-                          <p className="imp-src">근거 · {m.basis_label || '가정값'}{m.source ? ` · ${tidy(m.source)}` : ''}</p>
+                          <p className="imp-src">절감 근거 · {m.basis_label || '가정값'}{m.source ? ` · ${tidy(m.source)}` : ''}</p>
+                          {m.cost_source && <p className="imp-src">공사비 근거 · {tidy(m.cost_source)}</p>}
                           <Impact m={m} />
                         </Info>
                       </span>
@@ -289,6 +290,7 @@ function MeasView({ S }) {
                         {m.saving_won_low != null && <b className="ms-won"> · {manRange(m.saving_won_low, m.saving_won_high)}</b>}
                         {m.days != null && <span className="ms-sch"> · 공사 {m.days}일{m.vacate_days ? ` · 집 비우기 ${m.vacate_days}일` : ''}</span>}
                       </span>
+                      {m.cost_won && <span className="ms-cost num">공사비 {manRange(m.cost_won[0], m.cost_won[1])}{m.subsidy_won ? ` · 보조 ${manwon(m.subsidy_won)} 원` : ''}</span>}
                     </div>
                     {live && <Switch checked={on} label={`${m.name} 포함`} onChange={v => S.toggleMeasure(m.id, v, all)} />}
                   </li>
@@ -306,6 +308,8 @@ function MeasView({ S }) {
           <Row k="절감 합계" v={`${kwh(klo)}~${kwh(khi)} kWh`} strong />
           {d.total_saving_won && <Row k={<>1년에 아끼는 돈{priceOpen(d.prices) && <Info>주택용 단가는 출처를 확인하는 중이에요</Info>}</>}
             v={manRange(...d.total_saving_won)} strong />}
+          {d.total_cost && <Row k="공사비 합계" v={costTxt(d.total_cost)} strong
+            sub={`${d.total_cost.subsidy ? `보조금 약 ${manwon(d.total_cost.subsidy)} 원 · ` : ''}공사마다 i 에 출처가 있어요. 창호·외피 단열은 업체 단가로 계산한 값이에요`} />}
           {d.schedule && <Row k={<>공사 일정<Info>{tidy(d.schedule.note)}</Info></>}
             v={`약 ${d.schedule.total_days}일${d.schedule.vacate_days ? ` · 집 비우기 ${d.schedule.vacate_days}일` : ''}`} />}
           <Row k={<>온실가스 감축{efOpen && <Info>배출계수를 아직 확인하지 않아 추정값이에요</Info>}</>}
