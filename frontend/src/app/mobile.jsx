@@ -2,13 +2,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { cx } from '../core/format.js';
 import { usePersistent } from '../core/hooks.js';
-import { BigTextBtn, BuddyFace, Button, Icon, Sheet, connInfo } from './ui.jsx';
+import { BigTextBtn, BuddyFace, Button, Fold, Icon, Sheet, connInfo } from './ui.jsx';
 import { useAssist } from './assistant/context.js';
 import { Assistant, AiTitle, ViewerToggle } from './assistant/Assistant.jsx';
 import { AskRow } from './assistant/Nudge.jsx';
 import { ThemeBtn } from './entry.jsx';
 import { ViewSetting } from './viewMode.jsx';
-import { GROUPS, STEPS, ShellProvider, StepView, stepById, stepIndex, summaries } from './steps.jsx';
+import { CalcMethod, GROUPS, STEPS, ShellProvider, StepView, stepById, stepIndex, summaries } from './steps.jsx';
 
 function StepSheet({ open, onClose, S, cur, onPick, onExit }) {
   const sum = summaries(S);
@@ -47,6 +47,8 @@ function StepSheet({ open, onClose, S, cur, onPick, onExit }) {
           </div>
         ))}
       </div>
+      {/* 계산 방법 · 9단계에서 옮겨 옴 (9단계는 결론 정리) */}
+      <div className="ss-calc"><Fold title="계산 방법"><CalcMethod /></Fold></div>
     </Sheet>
   );
 }

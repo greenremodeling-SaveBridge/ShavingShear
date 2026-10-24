@@ -1601,3 +1601,19 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 .ms-build { padding-top: 12px; }
 .ms-build .field { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .ms-build .field-l { display: inline-flex; align-items: center; font-size: 15px; color: var(--text-2); }
+
+/* ══ ⑨ 결론 정리 ══ */
+.sum { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.sum-c { position: relative; display: grid; gap: 4px; align-content: start; padding: 16px 18px 14px; border-radius: 16px; background: var(--surface-2); }
+.sum-c.owner { background: color-mix(in srgb, var(--owner, #1F4F58) 10%, var(--surface)); }
+.sum-c.tenant { background: var(--primary-weak); }
+.sum-k { font-size: 13px; font-weight: 700; color: var(--text-3); }
+.sum-v { font-size: 19px; line-height: 27px; font-weight: 800; letter-spacing: -0.02em; color: var(--text-1); }
+.sum-s { font-size: 14px; line-height: 21px; color: var(--text-2); }
+.sum-go { justify-self: start; display: inline-flex; align-items: center; gap: 2px; margin-top: 4px; font-size: 13px; font-weight: 700; color: var(--primary-text); }
+/* 계산 방법 (모바일 전체 단계 창 · PC 창) */
+.calc { display: grid; gap: 12px; }
+.calc-t { font-size: 16px; line-height: 24px; font-weight: 700; }
+.ss-calc { margin-top: 12px; padding-top: 4px; border-top: 1px solid var(--line); }
+.pc .step-body.solo .step-l:has(.sum) { max-width: none; }
+.pc .sum { grid-template-columns: repeat(3, minmax(0, 1fr)); }

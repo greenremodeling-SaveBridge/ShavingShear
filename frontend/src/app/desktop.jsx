@@ -10,7 +10,7 @@ import { useResource, usePersistent, useTheme } from '../core/hooks.js';
 import { AmountField, BuddyBody, BuddyFace, Badge, BrandMark, Button, ErrorBox, Icon, Row, Sheet, Skeleton, Stepper, connInfo, monthBadge, statusText, usePulse } from './ui.jsx';
 import { MiniBars, MiniChecks, MiniLines, MiniRange, MiniSplit, dataSpan } from './charts.jsx';
 import {
-  BasisRows, GROUPS, RatioControl, STEPS, ShellProvider, StepView, baselineFail, baselinePass, groupOf, pctRange, stepById, stepIndex, tidy,
+  BasisRows, CalcMethod, GROUPS, RatioControl, STEPS, ShellProvider, StepView, baselineFail, baselinePass, groupOf, pctRange, stepById, stepIndex, tidy,
 } from './steps.jsx';
 import { Picker, usePicker } from './entry.jsx';
 import { useAssist, useJumpBack } from './assistant/context.js';
@@ -142,7 +142,7 @@ function PanelStatus({ S, onAbout, lead }) {  // lead: 돌아가기 · 지금 �
       </span>
       {c.action && <Button variant="weak" size="s" onClick={c.action.run}>{c.action.label}</Button>}
       {S.sim && <span className="p-sim" role="note"><b>가상 데이터 · 시연용</b><span>{S.sim.note || '실제 사용량이 아니에요'}</span></span>}
-      <button type="button" className="ai-intro icon" onClick={onAbout} title="세이빙 셰어 AI 소개" aria-label="세이빙 셰어 AI 소개"><Icon name="sparkle" size={16} /></button>
+      <button type="button" className="ai-intro icon" onClick={onAbout} title="계산 방법 · 세이빙 셰어 AI 소개" aria-label="계산 방법 보기"><Icon name="sparkle" size={16} /></button>
     </div>
   );
 }
@@ -810,7 +810,7 @@ export function DesktopApp({ S }) {
           <Nav page={route.page} goPage={goPage} onSearch={() => setSheet('search')} onNotice={() => setSheet('basis')} />
           <div className="d-page">
             <section className="panel" aria-label={route.page === 'home' ? '홈' : undefined}>
-              <PanelStatus S={S} onAbout={() => goStep('sys')} lead={<>{back && (
+              <PanelStatus S={S} onAbout={() => setSheet('calc')} lead={<>{back && (
                 <div className="d-back soft-in" role="navigation" aria-label="돌아가기">
                   <button type="button" className="d-back-go" onClick={goBack}
                     title={sid(back.route) === sid(route) ? '보던 자리로 돌아가기' : `${routeName(back.route)} 화면으로 돌아가기`}>
@@ -844,6 +844,7 @@ export function DesktopApp({ S }) {
         <PcTip onOpen={() => a?.setOpen(true)} />
         <BasisSheet open={sheet === 'basis'} onClose={() => setSheet(null)} S={S} />
         <SettingsSheet open={sheet === 'settings'} onClose={() => setSheet(null)} />
+        <Sheet open={sheet === 'calc'} onClose={() => setSheet(null)} title="계산 방법" wide><CalcMethod /></Sheet>
         <NotesSheet open={sheet === 'notes'} onClose={() => setSheet(null)} S={S} />
         <SearchSheet open={sheet === 'search'} onClose={() => setSheet(null)} S={S} onFound={() => goStep('bld')} />
       </div>

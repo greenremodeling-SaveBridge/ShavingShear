@@ -28,14 +28,14 @@ export const STEPS = [
   { id: 'alloc', n: 6, name: '이익 나누기' },
   { id: 'setl', n: 7, name: '월별 절약 결과' },
   { id: 'draft', n: 8, name: '계약서 문구' },
-  { id: 'sys', n: 9, name: '계산 방법 보기' },
+  { id: 'sys', n: 9, name: '결론 정리' },
 ];
 export const GROUPS = [
   { id: 'bld', name: '건물', steps: ['bld', 'elig'] },
   { id: 'diag', name: '진단', steps: ['prof', 'meas', 'base'] },
   { id: 'alloc', name: '분배', steps: ['alloc'] },
   { id: 'setl', name: '정산', steps: ['setl', 'draft'] },
-  { id: 'sys', name: '구성', steps: ['sys'] },
+  { id: 'sys', name: '결론', steps: ['sys'] },
 ];
 export const stepIndex = id => STEPS.findIndex(s => s.id === id);
 export const stepById = id => STEPS[stepIndex(id)];
@@ -943,11 +943,12 @@ const FLOW = [
   ['세이빙 AI', '자체 경량 모델(CPU, 747KB)이 질문의 의도만 판단하고, 숫자는 서버가 계산한 값만 써요. 화면 값과 직전 대화로 빈칸을 먼저 채우고, 모를 때만 하나씩 되물어요'],
   ['AI 설명', '캐시 → Gemini → 규칙 기반 템플릿 순서로 문장을 만들고, 숫자를 만들거나 판정을 바꾼 문장은 버려요'],
 ];
-function SysView() {
+/* 계산 방법 · 모바일 「전체 단계」 창과 PC ✦ 버튼에서 연다 */
+export function CalcMethod() {
   return (
-    <StepLayout title="금액과 판정은 서버가 계산하고, AI는 설명만 해요"
-      main={
-        <ol className="pipe">
+    <div className="calc">
+      <p className="calc-t">금액과 판정은 서버가 계산하고, AI는 설명만 해요</p>
+      <ol className="pipe">
           {FLOW.map(([k, v], i) => (
             <li key={k} className={cx(k === 'AI 설명' && 'ai-step')}>
               <Fold title={<span className="cl"><span className="cl-n num">{i + 1}</span>{k}</span>}>
@@ -955,20 +956,59 @@ function SysView() {
               </Fold>
             </li>
           ))}
-        </ol>
-      }
-      sideTitle="기술 구성" sideMode="fold"
-      side={
+      </ol>
+      <Fold title="기술 구성">
         <div className="rows lined">
           <Row k="백엔드" v={`FastAPI · SQLite · pandas · scikit${WJ}-${WJ}learn`} />
           <Row k="화면" v="한 장짜리 HTML · PC와 모바일 공용" />
           <Row k="장애 대비" v="서버 미연결 시 저장된 시연 데이터" />
         </div>
+      </Fold>
+    </div>
+  );
+}
+
+/* ══ ⑨ 결론 정리 · 공사 비용·유형·기간, 건물주와 세입자에게 남는 것 ══
+   금액은 서버가 계산한 값 그대로 (화면은 모아서 보여주기만) */
+function SumView({ S }) {
+  const { go } = useShell();
+  const al = S.allocation.data, me = S.measures.data, el = S.eligibility.data, se = S.settlement.data;
+  const list = S.measureList || me?.measures || [];
+  const picked = list.filter(m => (S.picked ?? list.map(x => x.id)).includes(m.id));
+  const [rlo, rhi] = me?.total_saving_rate || [];
+  const stay = picked.length > 0 && picked.every(m => TENANT_IMPACT[m.id]);
+  const owner = al ? (al.payback_years != null ? `${al.payback_years}년에 공사비 회수` : '기간 안에 회수 어려움') : '—';
+  const tenant = al ? `매달 ${won(al.tenant_monthly_won)}원 절약` : '—';
+  const cards = [
+    { k: '공사 유형', v: picked.map(m => m.name.replace(/\s*\(.*\)$/, '')).join(' · ') || '—', sub: rlo != null ? `예상 절감률 ${pctRange(rlo, rhi)}` : null, to: 'meas' },
+    { k: '공사 기간', v: `약 ${S.buildMonths}개월`, sub: stay ? '세입자는 나가지 않고 영업하며 공사 (가정값)' : '가정값', to: 'meas' },
+    { k: '공사 비용', v: koMoney(S.invest), sub: `건물주 부담${el?.programs?.length ? ` · ${el.programs.join(' · ')} 신청 가능` : ''}`, to: 'alloc' },
+    { k: '나눈 비율', v: `건물주 ${pct1(S.ratio)} · 세입자 ${pct1(1 - S.ratio)}`, sub: `분배 기간 ${S.years}년`, to: 'alloc' },
+    { k: '건물주에게 이득', v: owner, sub: al ? `연 ${won(al.owner_annual_won)}원 · ${S.years}년 동안 ${koMoney(al.owner_total_won)}` : null, tone: 'owner', to: 'alloc' },
+    { k: '세입자에게 이득', v: tenant, sub: al ? `연 ${won(al.tenant_annual_won)}원` : null, tone: 'tenant', to: 'alloc' },
+  ];
+  return (
+    <StepLayout
+      eyebrow={se?.actual_based ? <Badge tone="green" lg mark="fix">실측 기반</Badge> : <Badge tone="amber" lg mark="sim">예상 금액 · 공사 전</Badge>}
+      title={!al ? '결론을 정리하고 있어요'
+        : al.payback_years != null ? `건물주는 ${al.payback_years}년에 공사비를 돌려받고, 세입자는 매달 ${won(al.tenant_monthly_won)}원이 남아요`
+        : `세입자는 매달 ${won(al.tenant_monthly_won)}원이 남지만, 건물주는 기간 안에 공사비를 다 돌려받기 어려워요`}
+      main={
+        <div className="sum">
+          {cards.map(c => (
+            <div key={c.k} className={cx('sum-c', c.tone)}>
+              <span className="sum-k">{c.k}</span>
+              <b className="sum-v num">{c.v}</b>
+              {c.sub && <span className="sum-s">{c.sub}</span>}
+              <button type="button" className="sum-go" onClick={() => go(c.to)}>바꾸기<Icon name="right" size={14} /></button>
+            </div>
+          ))}
+        </div>
       } />
   );
 }
 
-const VIEWS = { bld: BldView, elig: EligView, prof: ProfView, meas: MeasView, base: BaseView, alloc: AllocView, setl: SetlView, draft: DraftView, sys: SysView };
+const VIEWS = { bld: BldView, elig: EligView, prof: ProfView, meas: MeasView, base: BaseView, alloc: AllocView, setl: SetlView, draft: DraftView, sys: SumView };
 /* 화면마다 맨 위에 한 번 · "이 화면은 무엇이고, 지금 뭘 하면 되는지" 한 줄씩 */
 const GUIDE = {
   bld: ['건물 정보가 맞는지만 확인해 주세요', '맞으면 아래 「맞아요」를 눌러 주세요. 다르면 「다른 건물」을 누르세요.'],
@@ -979,7 +1019,7 @@ const GUIDE = {
   alloc: ['공사비를 건물주와 세입자가 어떻게 나눌지 정해 보는 화면이에요', '막대를 좌우로 움직여 보세요. 건물주 몫이 커질수록 세입자 몫은 줄어요.'],
   setl: ['매달 얼마나 아꼈는지 보여줘요', '오른쪽(또는 아래) 목록에서 달을 누르면 그 달 내용이 나와요.'],
   draft: ['앞 단계에서 정한 값이 계약서에 들어간 모습이에요', '형광펜은 1~7단계에서 온 값이고, ⓘ를 누르면 왜 그 값인지 나와요. 꼭 전문가와 함께 확인하세요.'],
-  sys: ['이 앱이 어떻게 계산하는지 알려주는 화면이에요', '궁금한 분만 읽으세요. 몰라도 사용하는 데 문제없어요.'],
+  sys: ['공사부터 정산까지, 두 사람에게 무엇이 남는지 한눈에 정리했어요', ''],
 };
 function StepGuide({ id }) {
   const g = GUIDE[id];
