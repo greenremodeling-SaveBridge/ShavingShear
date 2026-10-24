@@ -218,6 +218,30 @@ function Warn({ list }) {
   );
 }
 
+/* 공사별 세입자 영향 · 계산값이 아닌 일반 안내 (현장마다 다름) */
+const TENANT_IMPACT = {
+  window: { stay: '나가지 않아도 돼요 · 구역을 나눠 진행', noise: '보통 · 창틀 뜯을 때', time: '구역마다 짧게', note: '교체하는 동안 그 구역은 냉난방이 안 돼요' },
+  envelope: { stay: '나가지 않아도 돼요 · 바깥 비계 작업', noise: '보통~많음 · 바깥 소음·분진', time: '긴 편 (건물 전체를 둘러서)', note: '비계·가림막이 간판과 출입구를 가릴 수 있어요' },
+  boiler: { stay: '나가지 않아도 돼요 · 영업 끝난 뒤 가능', noise: '적음', time: '짧음 (기기만 교체)', note: '바꾸는 날은 난방·온수가 잠깐 멈춰요' },
+  led: { stay: '나가지 않아도 돼요 · 영업 끝난 뒤 가능', noise: '적음', time: '짧음 (기기만 교체)', note: '천장 작업하는 자리만 잠깐 비워 주면 돼요' },
+};
+function Impact({ id }) {
+  const t = TENANT_IMPACT[id];
+  if (!t) return null;
+  return (
+    <div className="imp">
+      <p className="imp-h">세입자에게는</p>
+      <dl>
+        <div><dt>영업 중 공사</dt><dd>{t.stay}</dd></div>
+        <div><dt>소음·분진</dt><dd>{t.noise}</dd></div>
+        <div><dt>공사 기간</dt><dd>{t.time}</dd></div>
+        <div><dt>주의</dt><dd>{t.note}</dd></div>
+      </dl>
+      <p className="imp-s">일반적인 경우예요 · 현장마다 달라요</p>
+    </div>
+  );
+}
+
 function MeasView({ S }) {
   const r = S.measures;
   if (!r.data) return <StepPending r={r} />;
@@ -262,6 +286,7 @@ function MeasView({ S }) {
                         <Info label={`${m.name} 자세히`}>
                           <p>{tidy(m.addresses)}{rr.length === 2 ? ` · 절감률 ${pctRange(rr[0], rr[1])}` : ''}</p>
                           {m.survey_note && <p>{tidy(m.survey_note)}</p>}
+                          <Impact id={m.id} />
                         </Info>
                       </span>
                       <span className="ms-v num">연 {kwh(m.saving_kwh_low)}~{kwh(m.saving_kwh_high)} kWh</span>

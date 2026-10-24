@@ -1539,3 +1539,12 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
   .pc .doc-keys dd { line-height: 23px; }
   .pc .doc-full-btn { line-height: 18px; }
 }
+
+/* 추천 공사 i · 세입자 영향 */
+.imp { display: grid; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.16); }
+.imp-h { font-weight: 800; }
+.imp dl { display: grid; gap: 4px; }
+.imp dl > div { display: flex; gap: 10px; }
+.imp dt { flex: 0 0 72px; opacity: 0.7; }
+.imp dd { min-width: 0; font-weight: 600; }
+.imp-s { font-size: 12px; opacity: 0.6; }
