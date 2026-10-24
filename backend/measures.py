@@ -414,13 +414,13 @@ def apply_measures(years, selected=None, catalog=None, prices=None):
     unverified_ef = [v["name"] for v in EMISSION_FACTORS.values() if not v["verified"]]
     missing_src = [r["name"] for r in rows if r["source_missing"]]
 
-    # 공사 일정 · 한 번에 하나씩 이어서 한다고 보고 더한다. 집을 비우는 공사는 그 기간을 더한다.
+    # 공사 일정 · 여러 공사를 한꺼번에 진행한다고 보고 겹친다(가장 긴 공사 = 전체 일정). 집 비우는 기간도 겹친다.
     schedule = {
         "works": [{"id": r["id"], "name": r["name"], "days": r["days"], "vacate_days": r["vacate_days"]} for r in rows],
-        "total_days": sum(r["days"] or 0 for r in rows),
-        "vacate_days": sum(r["vacate_days"] or 0 for r in rows),
+        "total_days": max([r["days"] or 0 for r in rows], default=0),
+        "vacate_days": max([r["vacate_days"] or 0 for r in rows], default=0),
         "is_assumption": True,
-        "note": "공사 기간·집을 비우는 기간은 일반적인 경우를 잡은 가정값입니다. 공사를 차례로 한다고 보고 더했습니다. 현장·견적에 따라 달라집니다.",
+        "note": "공사를 한꺼번에 진행해 가장 긴 공사 기간을 전체 일정으로 잡았어요. 기간은 가정값이에요.",
     }
     won_lo = sum(t["saving_won_low"] for t in totals.values())
     won_hi = sum(t["saving_won_high"] for t in totals.values())

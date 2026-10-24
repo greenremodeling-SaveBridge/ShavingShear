@@ -811,7 +811,7 @@ function draftDoc(S) {
     addr: h(b.addr || '○○', 1, '1단계 「건물 확인」에서 맞다고 확인한 건축물대장 주소예요.'),
     area: b.area ? h(`${Number(b.area).toLocaleString('ko-KR')}㎡`, 1, '건축물대장의 연면적이에요.') : null,
     work: h(on.length ? on.join(', ') : '추천 공사', 4, '4단계 「추천 공사」에서 켜 둔 공사예요. 스위치로 끈 공사는 여기서 빠져요.'),
-    days: h(sch ? `약 ${sch.total_days}일` : '—', 4, sch ? `4단계에서 고른 공사를 차례로 한다고 보고 더한 일정이에요. ${sch.note}` : '4단계에서 계산해요.'),
+    days: h(sch ? `약 ${sch.total_days}일` : '—', 4, sch ? `4단계에서 고른 공사를 한꺼번에 진행할 때의 일정이에요. ${sch.note}` : '4단계에서 계산해요.'),
     vac: h(vac ? `약 ${vac}일` : '없음', 4, vac ? `집을 비워야 하는 공사(${sch.works.filter(w => w.vacate_days).map(w => w.name).join(', ')})의 기간이에요. 가정값이에요.` : '고른 공사 중 집을 비우는 공사가 없어요.'),
     monthly: h(ok ? `${won(bn.tenant.monthly_won[0])}~${won(bn.tenant.monthly_won[1])}원` : '—', 6, '6단계 「이득 확인」의 예상 절감액이에요. 고른 공사의 절감량 × 주택용 단가로 계산했어요.'),
     pe: h(pr.elec ? `${pr.elec.won_per_kwh}원/kWh` : '—', 6, pr.elec ? `${pr.elec.source}${pr.elec.verified === false ? ' · 출처 확인 중' : ''}` : '단가'),
