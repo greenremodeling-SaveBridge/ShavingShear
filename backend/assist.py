@@ -33,6 +33,7 @@ AI = SavingAI()
 router = APIRouter()
 
 TAG = {"mediate": "🤝 합의 도우미", "resolve": "🏢 건물 찾기", "analyze": "🔎 변동 분석", "trust": "🛡 신뢰 확인", "clarify": "",
+       "benefit": "🏠 이득 확인",
        "carbon": "🌱 온실가스", "measures": "🛠 개선 대책", "support": "📋 지원사업", "scope": "🏛 적용 대상", "rent": "🤝 합의 도우미", "settle": "🧾 정산 판단"}
 SIM_NOTE = "공사 전 예상치예요"
 POST_NOTE = "공사 후 실측 사용량과 기저선의 차이로 계산한 연간 절감액이에요"
@@ -43,8 +44,6 @@ def money_note(bld_id):
     sb = M.baseline_of(bld_id).get("saving_basis") or {}
     o = M.data_origin(bld_id)
     n = [POST_NOTE if sb.get("actual_based") else SIM_NOTE]
-    if o["is_simulated"]:
-        n.append(f"{o['label']} — 실제 측정값이 아니에요")
     return n
 
 
@@ -421,8 +420,10 @@ GREET = re.compile(r"^(안녕|하이|hi|hello|ㅎㅇ|반가)", re.I)
 THANKS = re.compile(r"고마|감사|땡큐|ㄱㅅ")
 SAFE = re.compile(r"안전|보수|최악|낮게\s*나|적게\s*나|덜\s*위험")
 CH = {
-    "deal": {"label": "공사비 5천만, 8년", "message": "공사비 5천만, 8년 안에 회수하고 싶어요"},
-    "gas": "가스가 왜 튀었어?",
+    # 2026-10-24 · 단독주택 이득 중심으로 추천 질문을 바꿈 (회수 기간·가스 이상 질문은 뺌)
+    "deal": "세입자는 매달 얼마 아껴요?",
+    "gas": "집은 며칠 비워야 해요?",
+    "cost": "공사비는 얼마예요?",
     "trust": "이 금액 믿어도 돼요?",
     "tenant": "세입자 입장은?",
     "owner": "건물주 입장은?",
@@ -431,6 +432,54 @@ CH = {
     "money": {"label": "공사비 바꿔 볼래요", "fill": "공사비 "},
     "byName": {"label": "건물 이름으로 찾을게요", "fill": "건물 이름: "},
 }
+
+
+# ───────────────── 단독주택 이득 질문 — /api/benefit 숫자로만 답한다 (2026-10-24) ─────────────────
+T_VACATE = re.compile(r"비워|비우|나가\s*(야|서|있)|이사|며칠|몇\s*일|공사\s*기간|얼마나\s*걸|일정")
+T_COST = re.compile(r"공사비|공사\s*비용|얼마\s*들|비용이|돈이\s*얼마")
+T_MONTHLY = re.compile(r"매달|한\s*달|월\s*얼마|(아껴|아끼|절약|줄어)|세입자.{0,6}(이득|얼마)")
+
+
+def manr(lo, hi):
+    """만 원 단위로 반올림한 범위 (읽기용) · 674,287~830,063 → '67만~83만 원'"""
+    a, b = round(lo / 10_000), round(hi / 10_000)
+    return f"{a:,}만 원" if a == b else f"{a:,}만~{b:,}만 원"
+
+
+def benefit_answer(t, s, ctx, src):
+    """매달 절약 · 집 비우는 기간 · 공사비 질문이 아니면 None"""
+    if s.get("invest_won") or s.get("target_years") or s.get("owner_ratio"):
+        return None                                  # 숫자를 말하면 합의 계산이 먼저
+    kind = "vacate" if T_VACATE.search(t) else "cost" if T_COST.search(t) else "monthly" if T_MONTHLY.search(t) else None
+    if not kind:
+        return None
+    ids = ctx.get("ids") or []
+    b = M.get_benefit(ctx.get("bld_id") or 3, ",".join(ids) if isinstance(ids, list) else "")
+    if not b.get("available"):
+        return None
+    sch, cur, (lo, hi) = b["schedule"], b["current"], b["saving"]["total_won"]
+    mlo, mhi = b["tenant"]["monthly_won"]
+    if kind == "vacate":
+        works = [w["name"] for w in sch["works"] if w["vacate_days"]]
+        reply = (f"집은 약 {sch['vacate_days']}일 비워야 해요({', '.join(works)}). 그동안은 관리비 할인으로 보상하고, 금액은 두 분이 정해요. "
+                 f"공사를 한꺼번에 하면 전체 일정은 약 {sch['total_days']}일이에요." if sch["vacate_days"]
+                 else f"집을 비우지 않아도 돼요. 공사를 한꺼번에 하면 전체 일정은 약 {sch['total_days']}일이에요.")
+        facts = [{"label": "집 비우기", "value": sch["vacate_days"], "unit": "일", "kind": "model", "goto": "meas"},
+                 {"label": "전체 일정", "value": sch["total_days"], "unit": "일", "kind": "model", "goto": "meas"}]
+        chips = [CH["deal"], CH["cost"]]
+    elif kind == "cost":
+        c = b["owner"]["cost"]
+        prog = " · ".join(b["owner"]["programs"])
+        reply = (f"공사비는 {manr(c['low'], c['high'])}이에요. 건물주가 내고, {prog} 신청을 함께 볼 수 있어요." if c
+                 else "공사별 공사비는 아직 확인 중이에요.")
+        facts = [{"label": "공사비 하한", "value": c["low"], "unit": "원", "kind": "simulated", "goto": "meas"}] if c else []
+        chips = [CH["deal"], CH["gas"]]
+    else:
+        reply = (f"세입자는 매달 {won(mlo)}~{won(mhi)}원을 아껴요. 지금 1년 요금 {manr(cur['total_won'], cur['total_won'])} 중 "
+                 f"연 {manr(lo, hi)}이 줄어요.")
+        facts = [{"label": "연 절약 하한", "value": lo, "unit": "원", "kind": "simulated", "goto": "alloc"}]
+        chips = [CH["gas"], CH["cost"]]
+    return resp("benefit", reply, facts=facts, notices=[SIM_NOTE], chips=chips, source=src)
 
 
 # ───────────────── 모델이 모르는 주제 — 규칙이 먼저 잡는다 (2026-10-22 추가) ─────────────────
@@ -684,7 +733,7 @@ def post_assist(req: AssistReq):
 
     # 모델이 모르는 주제(온실가스 · 개선 대책 · 지원사업 · 공공건축물 · 월세)는 규칙이 먼저 답한다
     if last.get("need") not in ("confirm_money", "invest", "years"):
-        ta = topic_answer(t, s, ctx, "template")
+        ta = benefit_answer(t, s, ctx, "template") or topic_answer(t, s, ctx, "template")
         if ta:
             return ta
 
@@ -700,7 +749,7 @@ def post_assist(req: AssistReq):
 
     # ── 인사 · 고마움 ──
     if intent in ("OUT", "ASK") and GREET.search(t):
-        return resp("clarify", "안녕하세요, 세이빙 AI예요. 공사비를 몇 년 안에 돌려받을 수 있는지, 사용량이 왜 바뀌었는지 같은 걸 편하게 물어보세요.",
+        return resp("clarify", "안녕하세요, 세이빙 AI예요. 매달 얼마를 아끼는지, 집을 며칠 비워야 하는지 같은 걸 편하게 물어보세요.",
                     chips=[CH["deal"], CH["gas"], CH["trust"]], source=src)
     if intent in ("OUT", "ASK") and THANKS.search(t):
         return resp("clarify", "도움이 됐다니 다행이에요. 더 궁금한 게 생기면 언제든 물어보세요.", chips=[CH["trust"], CH["gas"]], source=src)

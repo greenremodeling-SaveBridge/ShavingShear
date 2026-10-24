@@ -40,7 +40,7 @@ export function AssistProvider({ S, children }) {
     return {
       step: nav.current.step || 'entry', bld_id: s.bld.data?.bld_id ?? null, viewer: s.viewer,
       invest_won: s.invest, owner_ratio: s.ratio, target_years: s.years,
-      quarter: s.quarterKey, last: last.current,
+      quarter: s.quarterKey, last: last.current, ids: s.picked,
     };
   };
 
