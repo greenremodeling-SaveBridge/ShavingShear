@@ -1548,3 +1548,7 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 .imp dt { flex: 0 0 72px; opacity: 0.7; }
 .imp dd { min-width: 0; font-weight: 600; }
 .imp-s { font-size: 12px; opacity: 0.6; }
+
+/* 이동 버튼이 바뀐 「‹ 이전 화면」 · 눈에 띄게 어두운 색 */
+.peek-act button.main.back, .as-goto.back { background: var(--text-1); color: var(--surface); }
+.as-goto.back { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 12px 0 8px; border-radius: 999px; justify-self: start; }

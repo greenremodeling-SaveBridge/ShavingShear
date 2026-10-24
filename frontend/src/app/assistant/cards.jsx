@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { cx, won, kwh, pct, ymTxt, isNum } from '../../core/format.js';
 import { KIND, saveMe } from '../../core/assist.js';
 import { Badge, BuddyBody, Button, Icon, Mark, StatusBadge } from '../ui.jsx';
-import { useAssist } from './context.js';
+import { useAssist, useJumpBack } from './context.js';
 
 /* 쉼표만 붙이고 소수는 그대로 (0.655 → 0.655, 18.7 → 18.7) */
 export const numTxt = v => (isNum(v) ? Number(v).toLocaleString('ko-KR', { maximumFractionDigits: 3 }) : '—');
@@ -55,6 +55,7 @@ function Line({ k, d, ok, viewer }) {
 export function MediateCard({ data, viewer, building }) {
   const a = useAssist();
   const [sel, setSel] = useState(data.pick || data.options?.[0]?.key);
+  const jb = useJumpBack();
   if (!data.feasible) return <Alternatives data={data} />;
   const o = data.options.find(x => x.key === sel) || data.options[0];
   const cond = { ratio: o.owner_ratio, invest: data.invest_won, years: data.target_years };
@@ -81,8 +82,12 @@ export function MediateCard({ data, viewer, building }) {
         ))}
       </div>
       <div className="mc-act">
-        <Button variant="gray" size="m" onClick={() => a.applyAlloc(cond, { to: 'draft', ai: true, building })}>{a.stay ? '특약에 반영' : '특약 만들기'}</Button>
-        <Button size="m" onClick={() => a.applyAlloc(cond, { building })}>{a.stay ? '이 조건 적용' : '이 조건으로 보기'}</Button>
+        {jb.on && jb.which === 'draft'
+          ? <Button variant="gray" size="m" onClick={jb.back}><Icon name="left" size={16} />이전 화면</Button>
+          : <Button variant="gray" size="m" onClick={() => { jb.mark('draft'); a.applyAlloc(cond, { to: 'draft', ai: true, building }); }}>{a.stay ? '특약에 반영' : '특약 만들기'}</Button>}
+        {jb.on && jb.which === 'alloc'
+          ? <Button size="m" onClick={jb.back}><Icon name="left" size={16} />이전 화면</Button>
+          : <Button size="m" onClick={() => { jb.mark('alloc'); a.applyAlloc(cond, { building }); }}>{a.stay ? '이 조건 적용' : '이 조건으로 보기'}</Button>}
       </div>
     </div>
   );
@@ -114,6 +119,7 @@ function Alternatives({ data }) {
 export function ResolveCard({ data, S, entry, onEnter }) {
   const a = useAssist();
   const [st, setSt] = useState('ask');           // ask · busy · opened · no
+  const jb = useJumpBack();
   const c = data.candidates?.[0];
   if (data.result !== 'matched' || !c) return null;      // 못 찾은 경우의 다음 길은 추천 칩으로
   const [picked, setPicked] = useState(null);
@@ -165,7 +171,8 @@ export function ResolveCard({ data, S, entry, onEnter }) {
       ) : opened ? (
         entry
           ? <Button block size="m" onClick={onEnter}>이 건물로 시작하기</Button>
-          : <Button variant="gray" block size="m" onClick={() => a.go('bld', { explicit: true })}>건물 정보 보기</Button>
+          : jb.on ? <Button variant="gray" block size="m" onClick={jb.back}><Icon name="left" size={16} />이전 화면</Button>
+          : <Button variant="gray" block size="m" onClick={() => { jb.mark(); a.go('bld', { explicit: true }); }}>건물 정보 보기</Button>
       ) : null}
     </div>
   );

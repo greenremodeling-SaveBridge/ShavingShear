@@ -23,7 +23,9 @@ export function AssistProvider({ S, children }) {
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState(null);
   const [cheerKey, setCheerKey] = useState(0);
-  const [stay, setStay] = useState(false);       // PC · 왼쪽 화면은 사용자가 직접 넘길 때만 바뀐다   // 올라갈 때마다 새싹이 잠깐 만세 (특약 복사 · 합의안 나옴)
+  const [stay, setStay] = useState(false);       // PC · 왼쪽 화면은 사용자가 직접 넘길 때만 바뀐다
+  const [navLen, setNavLen] = useState(null);    // PC · 지나온 자리 수 (이전 화면 버튼용)
+  const backFn = useRef(null);   // 올라갈 때마다 새싹이 잠깐 만세 (특약 복사 · 합의안 나옴)
   const piiNoted = useRef(false);
   const last = useRef(null);                  // 직전 합의 조건 — "안전하게 하면?" 같은 이어 묻기에 쓴다
   const nav = useRef({ go: null, step: null, closeOnNav: false, stay: false });
@@ -114,6 +116,8 @@ export function AssistProvider({ S, children }) {
     if (n.closeOnNav) setOpen(false);
     n.go(id, opt);
   }, []);
+  const bindBack = useCallback((len, fn) => { backFn.current = fn; setNavLen(len); }, []);
+  const navBack = useCallback(() => backFn.current?.(), []);
   const bindNav = useCallback((fn, step, closeOnNav, stayHere = false) => {
     nav.current = { go: fn, step, closeOnNav, stay: stayHere };
     setStay(stayHere);
@@ -148,8 +152,9 @@ export function AssistProvider({ S, children }) {
 
   const value = useMemo(() => ({
     open, setOpen, msgs, setMsgs, push, busy, draft, setDraft, send, ask, go, bindNav, applyAlloc, showToast, cheerKey, stay,
+    navLen, navBack, bindBack,
     reset: () => { setMsgs([]); last.current = null; },
-  }), [open, msgs, push, busy, draft, send, ask, go, bindNav, applyAlloc, showToast, cheerKey, stay]);
+  }), [open, msgs, push, busy, draft, send, ask, go, bindNav, applyAlloc, showToast, cheerKey, stay, navLen, navBack, bindBack]);
 
   return (
     <AssistCtx.Provider value={value}>

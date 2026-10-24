@@ -7,7 +7,7 @@ import { cx, firstSentence } from '../../core/format.js';
 import { chipOf, chipsFor } from '../../core/assist.js';
 import { agreeVoice, speechOk, useSpeech, voiceAgreed, VOICE_TOAST } from '../../core/useSpeech.js';
 import { Badge, BuddyBody, BuddyFace, Button, Icon, Info, usePulse } from '../ui.jsx';
-import { useAssist } from './context.js';
+import { useAssist, useJumpBack } from './context.js';
 import { AnalyzeCard, Facts, MediateCard, ResolveCard, TrustCard, numTxt } from './cards.jsx';
 import { Thinking } from './Thinking.jsx';
 
@@ -135,9 +135,11 @@ const noEmoji = t => String(t).replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/
 const STEP_NAME = { bld: '건물', elig: '대상 판정', prof: '건축물 진단', meas: '개선 대책', base: '기저선', alloc: '분배', setl: '정산 리포트', draft: '특약' };
 function GotoRow({ to }) {
   const a = useAssist();
+  const jb = useJumpBack();
   if (!to || !STEP_NAME[to]) return null;
+  if (jb.on) return <button type="button" className="as-goto back" onClick={jb.back}><Icon name="left" size={16} />이전 화면</button>;
   return (
-    <button type="button" className="as-goto" onClick={() => a.go(to, { explicit: true })}>
+    <button type="button" className="as-goto" onClick={() => { jb.mark(); a.go(to, { explicit: true }); }}>
       {STEP_NAME[to]} 화면에서 보기<Icon name="right" size={16} />
     </button>
   );

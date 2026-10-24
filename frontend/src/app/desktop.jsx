@@ -13,7 +13,7 @@ import {
   BasisRows, GROUPS, STEPS, ShellProvider, StepView, baselineFail, baselinePass, groupOf, pctRange, stepById, stepIndex, tidy,
 } from './steps.jsx';
 import { Picker, usePicker } from './entry.jsx';
-import { useAssist } from './assistant/context.js';
+import { useAssist, useJumpBack } from './assistant/context.js';
 import { Assistant } from './assistant/Assistant.jsx';
 import { AskLink } from './assistant/Nudge.jsx';
 import { chipOf, chipsFor, saveMe } from '../core/assist.js';
@@ -346,7 +346,8 @@ function MonthPeek({ S, peek, q, onClose, onBig, bigLabel }) {
   const an = (S.baseline.data?.anomalies || []).find(x => x.ym === ym);
   const ex = useResource(['ex', S.nonce, ym], () => fetchExplain(id, ym), { enabled: id != null && S.nonce > 0 });
   const [more, setMore] = useState(false);
-  useEffect(() => setMore(false), [ym]);
+  const jb = useJumpBack();
+  useEffect(() => { setMore(false); jb.reset(); }, [ym]); // eslint-disable-line react-hooks/exhaustive-deps
   const mb = m && monthBadge(m.state, q.d.status_code);
   const text = ex.data?.text || '';
   const head = firstSentence(text);
@@ -378,7 +379,9 @@ function MonthPeek({ S, peek, q, onClose, onBig, bigLabel }) {
           </>}
       </div>
       <div className="peek-act">
-        <button type="button" className="main" title={bigLabel} aria-label={bigLabel} onClick={onBig}>크게 보기<Icon name="right" size={16} /></button>
+        {jb.on
+          ? <button type="button" className="main back" onClick={jb.back}><Icon name="left" size={16} />이전 화면</button>
+          : <button type="button" className="main" title={bigLabel} aria-label={bigLabel} onClick={() => { jb.mark(); onBig(); }}>크게 보기<Icon name="right" size={16} /></button>}
         {a && <button type="button" title="이 달을 세이빙 AI에게 더 묻기" onClick={() => a.ask(`${ym.slice(2, 4)}년 ${+ym.slice(4, 6)}월 사용량 분석해 줘`)}>더 묻기</button>}
       </div>
     </section>
@@ -716,7 +719,7 @@ export function DesktopApp({ S }) {
   const routeName = r => (sid(r) === 'home' ? '홈' : stepById(sid(r))?.name || '이전');
 
   // 세이빙 AI 가 화면을 옮길 때 · 오른쪽 대화는 그대로 두고 판만 바꾼다 (이동 버튼을 누른 것만 · 돌아가기 가능)
-  useEffect(() => { a?.bindNav(goStep, route.step || route.page, false, true); }); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { a?.bindNav(goStep, route.step || route.page, false, true); a?.bindBack(hist.length, goBack); }); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const k = e => {
