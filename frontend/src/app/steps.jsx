@@ -824,7 +824,8 @@ function draftDoc(S) {
     work: h(on.length ? on.join(', ') : '추천 공사', 4, '4단계 「추천 공사」에서 켜 둔 공사예요. 스위치로 끈 공사는 여기서 빠져요.'),
     days: h(sch ? `약 ${sch.total_days}일` : '—', 4, sch ? `4단계에서 고른 공사를 한꺼번에 진행할 때의 일정이에요. ${sch.note}` : '4단계에서 계산해요.'),
     vac: h(vac ? `약 ${vac}일` : '없음', 4, vac ? `집을 비워야 하는 공사(${sch.works.filter(w => w.vacate_days).map(w => w.name).join(', ')})의 기간이에요. 가정값이에요.` : '고른 공사 중 집을 비우는 공사가 없어요.'),
-    monthly: h(ok ? `${won(bn.tenant.monthly_won[0])}~${won(bn.tenant.monthly_won[1])}원` : '—', 6, '6단계 「이득 확인」의 예상 절감액이에요. 고른 공사의 절감량 × 주택용 단가로 계산했어요.'),
+    monthly: h(ok ? `${won(bn.tenant.monthly_won[0])}~${won(bn.tenant.monthly_won[1])}원` : '—', 6, bn?.bills ? '6단계 「이득 확인」의 예상 절감액이에요. 지난 1년 사용량에 고른 공사의 절감률을 적용해 요금표로 달마다 계산했어요.' : '6단계 「이득 확인」의 예상 절감액이에요. 고른 공사의 절감량 × 주택용 단가로 계산했어요.'),
+    bill: h('한전·서울도시가스 요금표', 6, bn?.bills?.basis || '요금표'),
     pe: h(pr.elec ? `${pr.elec.won_per_kwh}원/kWh` : '—', 6, pr.elec ? `${pr.elec.source}${pr.elec.verified === false ? ' · 출처 확인 중' : ''}` : '단가'),
     pg: h(pr.gas ? `${pr.gas.won_per_kwh}원/kWh` : '—', 6, pr.gas ? `${pr.gas.source}${pr.gas.verified === false ? ' · 출처 확인 중' : ''}` : '단가'),
     invest: h(costTxt(bn?.owner?.cost) || '—', 4, '4단계에서 켜 둔 공사의 공사비를 더한 값이에요. 공사비 출처는 공사마다 i 에 있어요.'),
@@ -839,15 +840,25 @@ function draftDoc(S) {
   ];
   /* 조항마다 keys(화면에 보이는 핵심 줄) · full(원문 · 복사) */
   const cl = [
-    { k: '공사와 일정',
+    vac ? { k: '공사와 일정',
       keys: [['공사', [H.work]], ['전체 일정', [H.days]], ['집 비우는 기간', [H.vac]]],
-      full: ['임대인은 ', H.work, ' 공사를 하며, 전체 일정은 ', H.days, ', 그중 임차인이 집을 비우는 기간은 ', H.vac, '으로 한다.'] },
-    { k: '집 비우는 기간 보상',
+      full: ['임대인은 ', H.work, ' 공사를 하며, 전체 일정은 ', H.days, ', 그중 임차인이 집을 비우는 기간은 ', H.vac, '으로 한다.'] }
+      : { k: '공사와 일정',
+      keys: [['공사', [H.work]], ['전체 일정', [H.days]]],
+      full: ['임대인은 ', H.work, ' 공사를 하며, 전체 일정은 ', H.days, '으로 한다.'] },
+    // 집을 비우는 공사가 없으면 보상 조항 대신 「사는 채로 공사」
+    vac ? { k: '집 비우는 기간 보상',
       keys: [['보상', ['관리비 할인']], ['기간', [H.vac]], ['할인 금액', ['월 ○○원 (두 분이 정함)']]],
-      full: ['임대인은 임차인이 집을 비우는 ', H.vac, ' 동안 관리비를 할인한다. 할인 금액과 방법은 두 당사자가 협의하여 정한다.'] },
+      full: ['임대인은 임차인이 집을 비우는 ', H.vac, ' 동안 관리비를 할인한다. 할인 금액과 방법은 두 당사자가 협의하여 정한다.'] }
+      : { k: '사는 채로 공사',
+      keys: [['집 비우기', [H.vac, ' · 사는 채로 공사']], ['보상', ['필요 없음']]],
+      full: ['공사는 임차인이 집을 비우지 않고 사는 채로 진행한다.'] },
     { k: '요금 절감',
-      keys: [['줄어드는 요금', [H.monthly, ' / 월 (예상)']], ['단가', ['전기 ', H.pe, ' · 가스 ', H.pg]], ['누구 몫', ['요금을 내는 임차인']]],
-      full: ['공사로 줄어든 전기·가스 요금은 요금을 내는 임차인의 몫으로 하며, 예상 절감액은 월 ', H.monthly, '(전기 ', H.pe, ' · 가스 ', H.pg, ' 기준)이다.'] },
+      keys: [['줄어드는 요금', [H.monthly, ' / 월 (예상)']],
+        bn?.bills ? ['계산', [H.bill, '로 달마다']] : ['단가', ['전기 ', H.pe, ' · 가스 ', H.pg]], ['누구 몫', ['요금을 내는 임차인']]],
+      full: bn?.bills
+        ? ['공사로 줄어든 전기·가스 요금은 요금을 내는 임차인의 몫으로 하며, 예상 절감액은 월 ', H.monthly, '(', H.bill, ' 기준)이다.']
+        : ['공사로 줄어든 전기·가스 요금은 요금을 내는 임차인의 몫으로 하며, 예상 절감액은 월 ', H.monthly, '(전기 ', H.pe, ' · 가스 ', H.pg, ' 기준)이다.'] },
     { k: '공사비와 지원',
       keys: [['공사비', [H.invest, ' · 임대인 부담']], ['지원사업', [H.prog, ' 신청 검토']]],
       full: ['공사비 ', H.invest, '은 임대인이 부담하고 ', H.prog, ' 신청을 함께 검토한다.'] },
@@ -895,6 +906,7 @@ function CopySheet({ open, onClose, S }) {
   const [fail, setFail] = useState(false);
   useEffect(() => { if (open) { setCk({ split: false, hold: false, vac: false }); setFail(false); } }, [open]);
   const all = ck.split && ck.hold && ck.vac;
+  const vac = S.benefit.data?.schedule?.vacate_days || 0;
   const run = async () => {
     const head = S.aiDraft ? '[법률 검토 전 초안 · AI가 정리한 문안입니다]' : '[설계안 · 법적 효력 없음]';
     const ok = await copyText(docText(S, head));
@@ -906,8 +918,8 @@ function CopySheet({ open, onClose, S }) {
     <Sheet open={open} onClose={onClose} title="복사하기 전에 확인해 주세요"
       footer={<Button block disabled={!all} onClick={run}><Icon name="copy" size={20} />복사</Button>}>
       <div className="ck-list">
-        <Check checked={ck.split} onChange={v => setCk(c => ({ ...c, split: v }))}>공사 일정과 집 비우는 기간이 맞아요</Check>
-        <Check checked={ck.hold} onChange={v => setCk(c => ({ ...c, hold: v }))}>관리비 할인 금액은 두 사람이 따로 정해요</Check>
+        <Check checked={ck.split} onChange={v => setCk(c => ({ ...c, split: v }))}>{vac ? '공사 일정과 집 비우는 기간이 맞아요' : '공사 일정이 맞아요'}</Check>
+        <Check checked={ck.hold} onChange={v => setCk(c => ({ ...c, hold: v }))}>{vac ? '관리비 할인 금액은 두 사람이 따로 정해요' : '집을 비우지 않고 공사해요'}</Check>
         <Check checked={ck.vac} onChange={v => setCk(c => ({ ...c, vac: v }))}>공사비와 지원 조항을 확인했어요</Check>
       </div>
       {fail && <p className="t-cap t-red">복사하지 못했어요. 글을 길게 눌러 직접 복사해 주세요</p>}
