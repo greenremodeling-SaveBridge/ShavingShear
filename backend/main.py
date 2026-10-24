@@ -22,8 +22,9 @@ from pydantic import BaseModel, Field
 
 from baseline import run_baseline
 from explain import explain as make_explanation
-from measures import diagnose, apply_measures
+from measures import diagnose, apply_measures, MEASURES, MEASURES_HOUSE
 import pricing
+import benefit as benefit_mod
 
 # 실행 위치와 상관없이 이 파일 옆의 DB·화면을 쓴다
 BASE_DIR = Path(__file__).resolve().parent
@@ -279,7 +280,10 @@ def data_origin(bld_id: int):
     if src is None:
         src = SIMULATED_BUILDINGS.get(bld_id, "measured")
     simulated = src != "measured"
-    if src == "simulated_retrofit_demo":
+    if src == "simulated_house_demo":
+        note = ("가상 단독주택 — 서울 샘플의 월별 사용 패턴을 단독주택 한 가구 규모로 줄인 시연 데이터입니다. "
+                "실제 어느 집의 사용량이 아닙니다.")
+    elif src == "simulated_retrofit_demo":
         note = ("가상 공사 시연 — 서울 샘플 사용량에 2025년 5월 가상 공사(전기 −15% · 가스 −30%)와 "
                 "11월 운영 변화 1건을 얹었습니다. 실제 절감 실적이 아닙니다.")
     elif simulated:
@@ -352,6 +356,7 @@ def get_eligibility(bld_id: int = 1):
     is_nonresi = not any(
         k in b["purpose"] for k in ("주택", "아파트", "연립", "다세대")
     )
+    is_house = pricing.is_house(b["purpose"])     # 단독주택 — 2026-10-24 회의로 1차 대상에 넣음
     is_seoul = "서울" in (b["sido"] or "")
 
     checks = [
@@ -369,16 +374,25 @@ def get_eligibility(bld_id: int = 1):
         },
         {
             "program": "세이빙 셰어",
-            "name": "1차 대상 — 비주거 건축물",
-            "ok": is_nonresi,
+            "name": "1차 대상 — 단독주택 · 비주거 건축물",
+            "ok": is_house or is_nonresi,
             "detail": b["purpose"],
         },
-        {
-            "program": "데이터",
-            "name": "공공 에너지데이터 제공 대상",
-            "ok": is_nonresi,
-            "detail": "단독주택·200세대 미만 공동주택은 제공 제외 (2020.1 적용)",
-        },
+        (
+            {
+                "program": "데이터",
+                "name": "에너지 사용량 — 한전·도시가스 고지서",
+                "ok": True,
+                "detail": "주거(단독주택)는 공공데이터 대신 세입자가 동의한 전기·가스 고지서로 받아요",
+            }
+            if is_house else
+            {
+                "program": "데이터",
+                "name": "공공 에너지데이터 제공 대상",
+                "ok": is_nonresi,
+                "detail": "200세대 미만 공동주택은 제공 제외 (2020.1 적용)",
+            }
+        ),
     ]
 
     programs = sorted(
@@ -837,10 +851,68 @@ def get_measures(bld_id: int = 1, ids: str = ""):
     """
     prof = get_profile(bld_id)
     selected = [s.strip() for s in ids.split(",") if s.strip()] or None
-    r = apply_measures(prof["years"], selected)
+    purpose = prof["building"]["purpose"]
+    house = pricing.is_house(purpose)
+    r = apply_measures(prof["years"], selected,
+                       catalog=MEASURES_HOUSE if house else MEASURES, prices=pricing.prices_for(purpose))
     r["bld_id"] = bld_id
     r["area"] = prof["area"]
+    r["is_house"] = house
     return r
+
+
+# ══════════════════════════════════════════════════════
+#  ⑥ 혜택 정리 (단독주택)  — 2026-10-24 회의
+#    세입자: 줄어든 요금 그대로 · 집 비우는 기간은 관리비 할인(협의)
+#    건물주: 건물 가치 상승 + 이자지원  (절감액을 나눠 갖지 않는다)
+# ══════════════════════════════════════════════════════
+@app.get("/api/benefit")
+def get_benefit(bld_id: int = 1, ids: str = "", property_won: int = 0):
+    m = get_measures(bld_id, ids)
+    if not m.get("available"):
+        return {"bld_id": bld_id, "available": False, "reason": m.get("reason")}
+    p = m["prices"]
+    cur_e = round(m["base_elec_kwh"] * p["elec"]["won_per_kwh"])
+    cur_g = round(m["base_gas_kwh"] * p["gas"]["won_per_kwh"])
+    lo, hi = m["total_saving_won"]
+    fuel = m["by_fuel"]
+    sch = m["schedule"]
+    el = get_eligibility(bld_id)
+    return {
+        "bld_id": bld_id,
+        "available": True,
+        "is_house": m["is_house"],
+        "base_year": m["base_year"],
+        "prices": p,
+        # 지금 1년에 내는 전기·가스 요금 (최근 완전한 해 × 단가)
+        "current": {"elec_won": cur_e, "gas_won": cur_g, "total_won": cur_e + cur_g,
+                    "elec_kwh": m["base_elec_kwh"], "gas_kwh": m["base_gas_kwh"]},
+        # 고른 공사로 1년에 줄어드는 요금
+        "saving": {
+            "elec_won": [fuel.get("elec", {}).get("saving_won_low", 0), fuel.get("elec", {}).get("saving_won_high", 0)],
+            "gas_won": [fuel.get("gas", {}).get("saving_won_low", 0), fuel.get("gas", {}).get("saving_won_high", 0)],
+            "total_won": [lo, hi],
+            "total_kwh": m["total_saving_kwh"],
+        },
+        "tenant": {
+            "annual_won": [lo, hi],
+            "monthly_won": [round(lo / 12), round(hi / 12)],
+            "note": "세입자가 전기·가스 요금을 내므로 줄어든 요금은 세입자 몫입니다.",
+        },
+        "schedule": sch,
+        "compensation": {
+            "vacate_days": sch["vacate_days"],
+            "way": "관리비 할인",
+            "note": ("집을 비우는 기간이 있어요. 그 기간은 관리비 할인으로 보상하고, 금액과 방법은 두 분이 정해요."
+                     if sch["vacate_days"] else "집을 비우는 공사가 없어요. 사는 채로 공사할 수 있어요."),
+        },
+        "owner": {
+            "value": benefit_mod.value_gain(property_won),
+            "programs": el["programs"],
+            "note": "건물주는 절감액을 나눠 갖지 않습니다. 건물 가치 상승과 이자지원이 건물주의 이득입니다.",
+        },
+        "data_origin": data_origin(bld_id),
+    }
 
 
 @app.get("/api/demo")

@@ -88,6 +88,7 @@ EMISSION_FACTORS = {
 
 SRC_COMPARE = "개별 절감률은 가정값. 비교 근거 — 4개 합계(15~26%)는 실제 사례보다 낮게 잡았다: 중앙보훈병원 별관 그린리모델링 컨설팅 23.1%·실시설계 44% (2026 그린리모델링 챌린지 본선 사전교육 발표), 노후 보건소 그린리모델링 시뮬레이션 39.6~45.4% (조정흠 외, 한국지열·수열에너지학회논문집 19(4), 2023)"
 
+# 공사 기간(days)·집을 비우는 기간(vacate_days)은 일반적인 경우를 잡은 가정값이다. 현장마다 다르다.
 MEASURES = [
     {
         "id": "window",
@@ -99,6 +100,7 @@ MEASURES = [
         "source": SRC_COMPARE,
         "needs_survey": True,
         "survey_note": "현재 창호의 유형·기밀 상태·면적 확인 필요",
+        "days": 7, "vacate_days": 0,
     },
     {
         "id": "envelope",
@@ -110,6 +112,7 @@ MEASURES = [
         "source": SRC_COMPARE,
         "needs_survey": True,
         "survey_note": "외벽 단열재 유무·두께, 열교 부위 확인 필요",
+        "days": 21, "vacate_days": 0,     # 비주거: 바깥 비계 작업(외단열)
     },
     {
         "id": "boiler",
@@ -121,6 +124,7 @@ MEASURES = [
         "source": SRC_COMPARE,
         "needs_survey": True,
         "survey_note": "현재 보일러 연식·효율등급 확인 필요",
+        "days": 1, "vacate_days": 0,
     },
     {
         "id": "led",
@@ -132,8 +136,29 @@ MEASURES = [
         "source": SRC_COMPARE,
         "needs_survey": True,
         "survey_note": "현재 조명 종류·대수, 조명이 전력에서 차지하는 비중 확인 필요",
+        "days": 1, "vacate_days": 0,
     },
 ]
+
+# 단독주택: 외피 단열은 실내 단열을 포함한다고 보고 집을 비운다 · 태양광을 더한다
+# 태양광은 비율이 아니라 연간 발전량(kWh)으로 전기 사용량을 줄인다 (fixed_kwh)
+SOLAR_3KW = {
+    "id": "solar",
+    "name": "태양광 설치 (3kW)",
+    "target": "elec",
+    "addresses": "전기 사용량(자가 발전)",
+    "fixed_kwh": [3300, 3900],          # ← 출처 확인 후 교체
+    "basis": "assumed",
+    "source": "주택용 3kW 연간 발전량 대표값 (출처 확인 중)",
+    "needs_survey": True,
+    "survey_note": "지붕 방향·그늘·구조 하중 확인 필요",
+    "days": 3, "vacate_days": 0,
+}
+MEASURES_HOUSE = [
+    {**m, **({"days": 28, "vacate_days": 28, "survey_note": m["survey_note"] + " · 단독주택은 실내 단열을 함께 해 집을 비우는 기간이 생김"}
+             if m["id"] == "envelope" else {})}
+    for m in MEASURES
+] + [SOLAR_3KW]
 
 
 # ══════════════════════════════════════════════════════
@@ -285,24 +310,36 @@ def diagnose(df, area, use_apr_day=None):
 #  개선 대책 → 에너지 절감량 → 온실가스 감축량
 # ══════════════════════════════════════════════════════
 
-def apply_measures(years, selected=None):
+def _saving(m, fuel_kwh):
+    """대책 하나의 절감량(kWh) 범위 · 비율형과 발전량형(fixed_kwh)"""
+    if "fixed_kwh" in m:
+        return min(m["fixed_kwh"][0], fuel_kwh), min(m["fixed_kwh"][1], fuel_kwh)
+    return fuel_kwh * m["rate_low"], fuel_kwh * m["rate_high"]
+
+
+def apply_measures(years, selected=None, catalog=None, prices=None):
     """
     years    : diagnose()가 돌려준 연도별 사용량
     selected : 적용할 대책 id 목록 (None이면 전부)
+    catalog  : 대책 목록 (None 이면 MEASURES · 단독주택은 MEASURES_HOUSE)
+    prices   : 연료별 단가 (None 이면 pricing.PRICES) — 절감량을 원으로 바꿀 때
 
-    반환: 대책별 절감량과 온실가스 감축량. 전부 범위로 돌려준다.
+    반환: 대책별 절감량·절감 금액·온실가스 감축량(범위) + 공사 일정·집을 비우는 기간.
     """
     if not years:
         return {"available": False, "reason": "연 단위 사용량이 확보되지 않았습니다"}
+    import pricing
+    catalog = catalog or MEASURES
+    prices = prices or pricing.PRICES
+    price = {f: prices[f]["won_per_kwh"] for f in ("elec", "gas")}
 
     base = years[-1]            # 가장 최근 완전한 해
-    picks = [m for m in MEASURES if selected is None or m["id"] in selected]
+    picks = [m for m in catalog if selected is None or m["id"] in selected]
 
     rows = []
     for m in picks:
         fuel_kwh = base[m["target"]]
-        lo = fuel_kwh * m["rate_low"]
-        hi = fuel_kwh * m["rate_high"]
+        lo, hi = _saving(m, fuel_kwh)
         ef = EMISSION_FACTORS[m["target"]]
 
         rows.append({
@@ -311,9 +348,14 @@ def apply_measures(years, selected=None):
             "addresses": m["addresses"],
             "fuel": ef["name"],
             "fuel_kwh": fuel_kwh,
-            "rate_range": [m["rate_low"], m["rate_high"]],
+            "rate_range": ([round(lo / fuel_kwh, 3), round(hi / fuel_kwh, 3)] if "fixed_kwh" in m and fuel_kwh
+                           else [m.get("rate_low"), m.get("rate_high")]),
             "saving_kwh_low": round(lo),
             "saving_kwh_high": round(hi),
+            "saving_won_low": round(lo * price[m["target"]]),
+            "saving_won_high": round(hi * price[m["target"]]),
+            "days": m.get("days"),
+            "vacate_days": m.get("vacate_days", 0),
             "co2_kg_low": round(lo * ef["value"]),
             "co2_kg_high": round(hi * ef["value"]),
             "basis": m["basis"],
@@ -334,17 +376,26 @@ def apply_measures(years, selected=None):
             continue
         keep_lo = keep_hi = 1.0
         for m in ms:
+            if "fixed_kwh" in m:
+                continue
             keep_lo *= (1 - m["rate_low"])
             keep_hi *= (1 - m["rate_high"])
         kwh = base[fuel]
+        # 발전량형(태양광)은 비율 대책을 적용하고 남은 사용량에서 뺀다 (0 밑으로는 안 내려감)
+        fix_lo = sum(m["fixed_kwh"][0] for m in ms if "fixed_kwh" in m)
+        fix_hi = sum(m["fixed_kwh"][1] for m in ms if "fixed_kwh" in m)
+        cut_lo = min(kwh, kwh * (1 - keep_lo) + fix_lo)
+        cut_hi = min(kwh, kwh * (1 - keep_hi) + fix_hi)
         ef = EMISSION_FACTORS[fuel]
         totals[fuel] = {
             "fuel": ef["name"],
             "base_kwh": kwh,
-            "saving_kwh_low": round(kwh * (1 - keep_lo)),
-            "saving_kwh_high": round(kwh * (1 - keep_hi)),
-            "co2_kg_low": round(kwh * (1 - keep_lo) * ef["value"]),
-            "co2_kg_high": round(kwh * (1 - keep_hi) * ef["value"]),
+            "saving_kwh_low": round(cut_lo),
+            "saving_kwh_high": round(cut_hi),
+            "saving_won_low": round(cut_lo * price[fuel]),
+            "saving_won_high": round(cut_hi * price[fuel]),
+            "co2_kg_low": round(cut_lo * ef["value"]),
+            "co2_kg_high": round(cut_hi * ef["value"]),
         }
 
     all_kwh_lo = sum(t["saving_kwh_low"] for t in totals.values())
@@ -360,9 +411,25 @@ def apply_measures(years, selected=None):
     unverified_ef = [v["name"] for v in EMISSION_FACTORS.values() if not v["verified"]]
     missing_src = [r["name"] for r in rows if r["source_missing"]]
 
+    # 공사 일정 · 한 번에 하나씩 이어서 한다고 보고 더한다. 집을 비우는 공사는 그 기간을 더한다.
+    schedule = {
+        "works": [{"id": r["id"], "name": r["name"], "days": r["days"], "vacate_days": r["vacate_days"]} for r in rows],
+        "total_days": sum(r["days"] or 0 for r in rows),
+        "vacate_days": sum(r["vacate_days"] or 0 for r in rows),
+        "is_assumption": True,
+        "note": "공사 기간·집을 비우는 기간은 일반적인 경우를 잡은 가정값입니다. 공사를 차례로 한다고 보고 더했습니다. 현장·견적에 따라 달라집니다.",
+    }
+    won_lo = sum(t["saving_won_low"] for t in totals.values())
+    won_hi = sum(t["saving_won_high"] for t in totals.values())
+
     return {
         "available": True,
         "base_year": base["year"],
+        "base_elec_kwh": base["elec"],
+        "base_gas_kwh": base["gas"],
+        "total_saving_won": [won_lo, won_hi],
+        "prices": prices,
+        "schedule": schedule,
         "base_total_kwh": base["total"],
         "measures": rows,
         "by_fuel": totals,
@@ -375,7 +442,8 @@ def apply_measures(years, selected=None):
         "emission_factors": EMISSION_FACTORS,
         "method": ("각 대책의 절감률을 해당 연료 사용량에 적용하고, "
                    "같은 연료에 겹치는 대책은 (1-a)(1-b)로 누적했습니다. "
-                   "단순 합산하면 과대 추정이 됩니다."),
+                   "태양광은 발전량만큼 남은 전기 사용량에서 뺍니다. "
+                   "단순 합산하면 과대 추정이 됩니다. 금액은 절감량 × 연료별 단가입니다."),
         "limits": [
             "절감률은 출처 확인 전의 시나리오 가정값이며 이 건물에서 실측한 값이 아닙니다.",
             "현장 진단 전이므로 각 대책의 적용 가능 여부가 확정되지 않았습니다.",

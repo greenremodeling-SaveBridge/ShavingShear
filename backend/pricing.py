@@ -71,3 +71,38 @@ def basis(annual_elec, annual_gas):
                  "단가는 한전 일반용(갑)Ⅰ·서울도시가스 영업용(1) 요금표 기준입니다. "
                  "공사 후에는 이 자리에 기저선−실측 차이가 들어갑니다."),
     }
+
+
+# ══════════════════════════════════════════════════════
+#  단독주택(주거) 단가 — 세입자가 실제로 내는 주택용 요금표
+#  ※ 값은 출처 확인 후 채운다. verified=False 인 동안 화면에 '확인 중'으로 표시된다.
+# ══════════════════════════════════════════════════════
+PRICES_HOUSE = {
+    "elec": {
+        "name": "전기",
+        "won_per_kwh": 150,
+        "unit": "원/kWh",
+        "is_assumption": True,
+        "verified": False,
+        "source": "주택용 저압 요금 대표값 (출처 확인 중)",
+        "to_verify": "누진 구간·기본요금·부가세에 따라 실제 단가가 달라짐",
+    },
+    "gas": {
+        "name": "도시가스",
+        "won_per_kwh": 80,
+        "unit": "원/kWh",
+        "is_assumption": True,
+        "verified": False,
+        "source": "주택난방용 도시가스 요금 대표값 (출처 확인 중)",
+        "to_verify": "기본요금·부가세 제외",
+    },
+}
+
+
+def is_house(purpose):
+    """주거(단독주택) 건물인가 — 단가·공사 목록·대상 판정이 달라진다."""
+    return "단독" in (purpose or "")
+
+
+def prices_for(purpose):
+    return PRICES_HOUSE if is_house(purpose) else PRICES
