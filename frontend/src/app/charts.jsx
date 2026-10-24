@@ -85,6 +85,8 @@ function prepare(rows, anomalies) {
 }
 
 const PHASE_NOTE = { 적용: '공사 전' };
+/* 구간마다 배경색 · 이전(회색) · 학습(파랑) · 검증(노랑) · 공사 후/적용(초록) */
+const PHASE_CLS = { 이전: 'pre', 학습: 'train', 검증: 'valid', '공사 후': 'post', 적용: 'post' };
 
 export function BaselineChart({ rows, anomalies }) {
   const [ref, w] = useMeasure();
@@ -136,9 +138,10 @@ export function BaselineChart({ rows, anomalies }) {
       aria-label={`월별 실측 사용량과 예측. 좌우 화살표로 달을 옮겨 볼 수 있어요.${missTxt ? ` 결측월 ${missTxt}` : ''}`}>
       {w > 0 && (
         <svg width={w} height={H} role="img" aria-label="월별 실측과 예측 그래프">
-          {D.bands.map((b, i) => (b.phase === '검증' ? (
-            <rect key={'b' + i} x={edge(b.a - 0.5)} y={M.t} width={edge(b.b + 0.5) - edge(b.a - 0.5)} height={ih} className="ch-band" />
-          ) : null))}
+          {D.bands.map((b, i) => (
+            <rect key={'b' + i} x={edge(b.a - 0.5)} y={M.t - 24} width={edge(b.b + 0.5) - edge(b.a - 0.5)} height={ih + 24}
+              className={`ch-band ${PHASE_CLS[b.phase] || 'pre'}`} />
+          ))}
           {D.ticks.map(t => (
             <g key={t}>
               <line x1={M.l} x2={M.l + iw} y1={Y(t)} y2={Y(t)} className="ch-grid" />

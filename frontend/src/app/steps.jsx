@@ -635,7 +635,7 @@ function AIExplain({ r, ym, open, setOpen, flagged }) {
       {!open && (
         <button type="button" className="aix-buddy" onClick={() => setOpen(true)}>
           <BuddyBody w={64} live mood={flagged ? 'surprise' : 'idle'} />
-          <span className="aix-bubble"><b>{+ym.slice(4, 6)}월 금액, 왜 이렇게 나왔을까요?</b><span>저를 누르면 설명해 드릴게요</span></span>
+          <span className="aix-bubble"><b>{+ym.slice(4, 6)}월 금액, 왜 이렇게 나왔을까요?</b></span>
         </button>
       )}
       {open && (
@@ -875,9 +875,7 @@ function DraftDoc({ S, tools }) {
   return (
     <div className="doc" role="document" aria-label="가상 임대차 계약서 특약사항">
       <div className="doc-h">
-        <span className="doc-k">가상 예시 · 법적 효력 없음</span>
         <h3>상가건물 임대차계약서 <small>특약사항</small></h3>
-        <p className="doc-legend"><mark className="hl">형광펜</mark> 1~7단계에서 정한 값 · <Icon name="info" size={14} /> 를 누르면 이유</p>
       </div>
       <dl className="doc-meta">
         {d.meta.map(([k, ps]) => <div key={k}><dt>{k}</dt><dd><Parts ps={ps} /></dd></div>)}
@@ -984,7 +982,7 @@ function StepGuide({ id }) {
   return (
     <aside className="sguide" aria-label="이 화면 안내">
       <span className="sguide-ic" aria-hidden="true"><Icon name="info" size={20} /></span>
-      <div><p className="sguide-t">{g[0]}</p><p className="sguide-s">{g[1]}</p></div>
+      <div><p className="sguide-t">{g[0]}</p></div>
     </aside>
   );
 }

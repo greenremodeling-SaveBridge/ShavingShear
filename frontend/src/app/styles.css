@@ -1552,3 +1552,20 @@ h1, h2, h3, .step-t, .entry-t, .sguide-t, .think-t, .amt-k, .metric-k, .out-k, .
 /* 이동 버튼이 바뀐 「‹ 이전 화면」 · 눈에 띄게 어두운 색 */
 .peek-act button.main.back, .as-goto.back { background: var(--text-1); color: var(--surface); }
 .as-goto.back { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 12px 0 8px; border-radius: 999px; justify-self: start; }
+
+/* ══ 세이빙 AI 한 칸 · 위 AI 설명 + 아래 대화 ══ */
+.as-top { flex: 0 1 auto; min-height: 0; max-height: 72%; overflow-y: auto; scrollbar-width: thin; padding: 4px 0 8px; }
+.as-top:has(.ds-fold:not(.open)) { padding-bottom: 4px; }
+.ds-fold { display: flex; align-items: center; gap: 8px; width: 100%; height: 40px; padding: 0 12px; border-radius: 12px; background: var(--primary-weak); color: var(--primary-text); font-size: 14px; font-weight: 700; text-align: left; }
+.ds-fold span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-fold > svg:last-child { color: var(--text-3); transition: transform 0.2s var(--ease); }
+.ds-fold.open > svg:last-child { transform: rotate(180deg); }
+.ds-fold.open { margin-bottom: 12px; }
+.as-top .buddy { margin-bottom: 14px; }
+.pc .d-side.chat { width: 360px; padding: 14px 18px 16px; }
+
+/* 기저선 그래프 · 구간 배경색 (이전 · 학습 · 검증 · 공사 후) */
+.ch-band.pre { fill: color-mix(in srgb, var(--text-4) 10%, transparent); }
+.ch-band.train { fill: var(--blue-weak); }
+.ch-band.valid { fill: var(--amber-weak); }
+.ch-band.post { fill: var(--primary-weak); }

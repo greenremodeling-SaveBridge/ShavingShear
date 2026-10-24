@@ -204,7 +204,7 @@ function useKeyboardInset(on) {
   }, [on]);
 }
 
-export function Assistant({ S, variant = 'sheet', onClose, entry, onEnter, onBack, step }) {
+export function Assistant({ S, variant = 'sheet', onClose, entry, onEnter, onBack, step, top, noHello }) {
   const a = useAssist();
   useKeyboardInset(variant !== 'panel');
   const log = useRef(null);
@@ -283,6 +283,7 @@ export function Assistant({ S, variant = 'sheet', onClose, entry, onEnter, onBac
           {onClose && <button type="button" className="icon-btn as-x" aria-label="세이빙 AI 닫기" onClick={onClose}><Icon name="close" size={20} /></button>}
         </header>
       )}
+      {top && <div className="as-top">{top}</div>}
       {answered > 0 && (
         <div className="as-recap-bar">
           <button type="button" aria-pressed={recap} onClick={() => setRecap(v => !v)}>
@@ -292,7 +293,7 @@ export function Assistant({ S, variant = 'sheet', onClose, entry, onEnter, onBac
       )}
       <div className="as-log" ref={log}>
         {a.msgs.length === 0
-          ? <Hello chips={chipsFor(step)} entry={entry} onPick={pick} />
+          ? (noHello ? null : <Hello chips={chipsFor(step)} entry={entry} onPick={pick} />)
           : recap ? <Recap msgs={a.msgs} S={S} />
           : <>
             {older.length > 0 && (

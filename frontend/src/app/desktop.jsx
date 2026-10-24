@@ -404,7 +404,6 @@ function Suggest({ step, S, top, max = 3 }) {
   if (!a) return null;
   return (
     <div className="ds-sug" role="list" aria-label="이 화면에서 물어볼 만한 것">
-      <p className="ds-sug-h">이 화면에서 물어볼 만한 것</p>
       {suggestFor(step, S, top).slice(0, max).map(c => {
         const x = chipOf(c);
         return (
@@ -417,7 +416,7 @@ function Suggest({ step, S, top, max = 3 }) {
   );
 }
 
-function AiPanel({ S, go, jump, setMonth, askAi, onHome, showReport, step }) {
+function AiPanel({ S, go, jump, setMonth, askAi, onHome, showReport, step, compact }) {
   const assist = useAssist();
   // 새싹: 답을 기다리면 생각 중 · 고른 분기가 '검증 완료'면 만세
   const cheer0 = usePulse(S.settlement.data?.status_code === 'VERIFIED' ? S.quarterKey : null, 'cheer', 3200, true);
@@ -436,7 +435,10 @@ function AiPanel({ S, go, jump, setMonth, askAi, onHome, showReport, step }) {
   const lex = useResource(['lex', S.nonce, last?.ym ?? null], () => fetchExplain(id, last.ym), { enabled: !!last && id != null && S.nonce > 0 });
   const keys = new Set(S.caseItems.map(c => c.key));
   // 고르면 이 칸에서 요약만 · 왼쪽 화면은 건드리지 않는다
-  const look = (key, ym) => setPeek({ key, ym });
+  const look = (key, ym) => { setPeek({ key, ym }); setOpen(true); };
+  // 대화가 시작되면 한 줄로 접는다 (줄을 누르면 다시 펼침)
+  const [open, setOpen] = useState(true);
+  useEffect(() => { setOpen(!compact); }, [compact]);
   // 크게 보기 · 사용자가 누른 이동이라 이때만 왼쪽을 바꾼다
   const big = ({ key, ym }) => {
     if (!keys.has(key)) { jump('base'); return; }
@@ -446,9 +448,14 @@ function AiPanel({ S, go, jump, setMonth, askAi, onHome, showReport, step }) {
   const bigLabel = p => (!keys.has(p.key) ? '원래 사용량 예측에서 크게 보기' : onHome ? '홈 리포트에서 크게 보기' : '정산 화면에서 크게 보기');
   return (
     <>
-      <AskLink line send={false} className="ds-ask" />
-      <div className="ds-head"><h2>AI 설명</h2></div>
-      {peek ? (
+      {compact && (
+        <button type="button" className={cx('ds-fold', open && 'open')} aria-expanded={open} onClick={() => setOpen(v => !v)}>
+          <Icon name="sparkle" size={15} />
+          <span>AI 설명{peek ? ` · ${ymTxt(peek.ym)} 요약` : last ? ` · ${+last.ym.slice(4, 6)}월 분석` : ''}</span>
+          <Icon name="down" size={16} />
+        </button>
+      )}
+      {!open ? null : peek ? (
         <MonthPeek S={S} peek={peek} q={(qs.data || []).find(x => x.key === peek.key)} onClose={() => setPeek(null)}
           onBig={() => big(peek)} bigLabel={bigLabel(peek)} />
       ) : (
@@ -479,7 +486,7 @@ function AiPanel({ S, go, jump, setMonth, askAi, onHome, showReport, step }) {
           )}
         </>
       )}
-      <Suggest step={step} S={S} top={top} max={peek ? 2 : 3} />
+      {!compact && <Suggest step={step} S={S} top={top} max={peek ? 2 : 3} />}
     </>
   );
 }
@@ -511,25 +518,26 @@ function BldPanel({ S, onSearch }) {
 
 function Rail({ side, setSide, onSettings }) {
   const a = useAssist();
-  const chatOn = !!a?.open;
+  const aiOn = side === 'ai';
   const [spinKey, setSpinKey] = useState(0);
+  // 같은 버튼을 다시 누르면 닫는다 · 세이빙 AI 가 아닌 칸을 열면 대화 열림 표시도 끈다
+  const pick = s => {
+    if (side === s) { setSide(null); a?.setOpen(false); return; }
+    setSide(s);
+    if (s !== 'ai') a?.setOpen(false);
+  };
   const [t, setT] = useTheme();
   const dark = t === 'dark' || (t === 'system' && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
   return (
     <nav className="d-rail" aria-label="오른쪽 패널">
-      <button type="button" className="rail-top" aria-label={side || chatOn ? '패널 접기' : '패널 펼치기'}
-        onClick={() => { if (chatOn) { a.setOpen(false); setSide(null); } else setSide(s => (s ? null : 'ai')); }}>
-        <Icon name={side || chatOn ? 'collapse' : 'expand'} size={20} />
+      <button type="button" className="rail-top" aria-label={side ? '패널 접기' : '패널 펼치기'}
+        onClick={() => (side ? pick(side) : pick('ai'))}>
+        <Icon name={side ? 'collapse' : 'expand'} size={20} />
       </button>
-      {a && (
-        <button type="button" className="rail-chat" data-rail="chat" aria-pressed={chatOn} onClick={() => { setSpinKey(k => k + 1); a.setOpen(!chatOn); }}>
-          <span className="rail-ic face"><BuddyFace size={30} live spinKey={spinKey} /></span>세이빙 AI
-        </button>
-      )}
-      <button type="button" data-rail="ai" aria-pressed={!chatOn && side === 'ai'} onClick={() => { a?.setOpen(false); setSide(s => (s === 'ai' && !chatOn ? null : 'ai')); }}>
-        <span className="rail-ic"><Icon name="sparkle" size={18} /></span>AI 설명
+      <button type="button" className="rail-chat" data-rail="chat" aria-pressed={aiOn} onClick={() => { setSpinKey(k => k + 1); pick('ai'); }}>
+        <span className="rail-ic face"><BuddyFace size={30} live spinKey={spinKey} /></span>세이빙 AI
       </button>
-      <button type="button" aria-pressed={!chatOn && side === 'bld'} onClick={() => { a?.setOpen(false); setSide(s => (s === 'bld' && !chatOn ? null : 'bld')); }}>
+      <button type="button" aria-pressed={side === 'bld'} onClick={() => pick('bld')}>
         <span className="rail-ic"><Icon name="building" size={18} /></span>내 건물
       </button>
       <span className="rail-gap" />
@@ -676,7 +684,10 @@ export function DesktopApp({ S }) {
   const a = useAssist();
   const [route, setRoute] = usePersistent('ss.v4.pc', { page: 'home', step: null },
     v => (v && typeof v.page === 'string' && (v.page === 'home' || GROUPS.some(g => g.id === v.page)) ? v : { page: 'home', step: null }));
-  const [side, setSide] = useState(() => (window.innerWidth >= 1440 ? 'ai' : null));
+  const [side, setSide] = useState(() => (window.innerWidth >= 1440 ? 'ai' : null));   // 'ai'(세이빙 AI 한 칸) · 'bld' · null
+  // 어디서든 세이빙 AI 를 부르면(ask) 그 칸을 연다
+  useEffect(() => { if (a?.open) setSide('ai'); }, [a?.open]);
+  const closeSide = () => { setSide(null); a?.setOpen(false); };
   const [sheet, setSheet] = useState(null);
   const [month, setMonth] = useState(null);
   const [htab, setHtab] = usePersistent('ss.v4.htab', 'setl', v => (HOME_TABS.some(t => t.id === v) ? v : 'setl'));
@@ -733,7 +744,7 @@ export function DesktopApp({ S }) {
 
   return (
     <ShellProvider value={{ device: 'pc', month, setMonth, go: goStep, aiReq, focus }}>
-      <div className={cx('pc d-shell', !side && !a?.open && 'closed')}>
+      <div className={cx('pc d-shell', !side && 'closed')}>
         <div className="d-main">
           <Nav page={route.page} goPage={goPage} onSearch={() => setSheet('search')} onNotice={() => setSheet('basis')} />
           <div className="d-page">
@@ -753,17 +764,18 @@ export function DesktopApp({ S }) {
           </div>
           {route.page !== 'home' && <Ticker S={S} onNotes={() => setSheet('notes')} />}
         </div>
-        {(a?.open || side) && <Splitter w={sideW} setW={setSideW} />}
-        {a?.open ? (
+        {side && <Splitter w={sideW} setW={setSideW} />}
+        {side === 'ai' ? (
+          /* 세이빙 AI 한 칸 · 위: AI 설명(대화가 시작되면 한 줄로 접힘) · 아래: 대화 */
           <aside className="d-side chat" aria-label="세이빙 AI" style={sideW ? { width: sideW } : undefined}>
-            <Assistant S={S} variant="panel" step={route.step || (route.page === 'home' ? 'bld' : route.page)} onClose={() => a.setOpen(false)} />
+            <Assistant S={S} variant="panel" step={route.step || (route.page === 'home' ? 'bld' : route.page)} onClose={closeSide} noHello
+              top={<AiPanel S={S} go={goStep} jump={jump} setMonth={setMonth} askAi={askAi} onHome={route.page === 'home'} showReport={showReport}
+                compact={(a?.msgs.length || 0) > 0}
+                step={route.step || (route.page === 'home' ? 'bld' : GROUPS.find(g => g.id === route.page)?.steps[0])} />} />
           </aside>
-        ) : side && (
-          <aside className="d-side" aria-label={side === 'ai' ? 'AI 설명' : '내 건물'} style={sideW ? { width: sideW } : undefined}>
-            {side === 'ai'
-              ? <AiPanel S={S} go={goStep} jump={jump} setMonth={setMonth} askAi={askAi} onHome={route.page === 'home'} showReport={showReport}
-                  step={route.step || (route.page === 'home' ? 'bld' : GROUPS.find(g => g.id === route.page)?.steps[0])} />
-              : <BldPanel S={S} onSearch={() => setSheet('search')} />}
+        ) : side === 'bld' && (
+          <aside className="d-side" aria-label="내 건물" style={sideW ? { width: sideW } : undefined}>
+            <BldPanel S={S} onSearch={() => setSheet('search')} />
           </aside>
         )}
         <Rail side={side} setSide={setSide} onSettings={() => setSheet('settings')} />
